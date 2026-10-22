@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { apiFetch, getAuthToken, setAuthToken, SESSION_EXPIRED_EVENT } from "./api";
 
 export type Role = "operator" | "supervisor" | "owner";
 
@@ -7,21 +8,17 @@ export interface AuthUser {
   name: string;
   username: string;
   role: Role;
+  last_login?: string;
 }
 
-const DEMO_USERS: (AuthUser & { password: string })[] = [
-  { id: "u-op-1", name: "Budi Santoso", username: "operator", password: "operator", role: "operator" },
-  { id: "u-sv-1", name: "Sari Wijaya", username: "supervisor", password: "supervisor", role: "supervisor" },
-  { id: "u-ow-1", name: "Pak Hendra", username: "owner", password: "owner", role: "owner" },
-];
-
-const KEY = "buahsafe.auth.v1";
+const USER_STORAGE_KEY = "buahsafe.auth.v1";
 
 interface Ctx {
   user: AuthUser | null;
+  token: string | null;
   ready: boolean;
-  login: (username: string, password: string) => { ok: boolean; error?: string };
-  logout: () => void;
+  login: (username: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  logout: () => Promise<void>;
   hasRole: (roles: Role[]) => boolean;
 }
 
@@ -29,45 +26,122 @@ const AuthCtx = createContext<Ctx | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [token, setTokenState] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const raw = localStorage.getItem(KEY);
-    if (raw) try { setUser(JSON.parse(raw)); } catch {}
-    setReady(true);
+    const initAuth = async () => {
+      const storedToken = getAuthToken();
+      const rawUser = localStorage.getItem(USER_STORAGE_KEY);
+      let cachedUser: AuthUser | null = null;
+
+      if (rawUser) {
+        try {
+          cachedUser = JSON.parse(rawUser);
+        } catch {
+          localStorage.removeItem(USER_STORAGE_KEY);
+        }
+      }
+
+      if (storedToken) {
+        setTokenState(storedToken);
+        // Validasi ke backend
+        const res = await apiFetch<{ ok: boolean; user: AuthUser }>("api/auth/me", {
+          timeoutMs: 4000,
+        });
+
+        if (res.ok && res.data?.user) {
+          const freshUser = res.data.user;
+          setUser(freshUser);
+          localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(freshUser));
+        } else if (res.status === 401 || res.status === 403) {
+          // Token kedaluwarsa atau tidak valid di server
+          setAuthToken(null);
+          localStorage.removeItem(USER_STORAGE_KEY);
+          setUser(null);
+          setTokenState(null);
+        } else if (cachedUser) {
+          // Server offline / timeout: pertahankan sesi lokal dengan peringatan
+          setUser(cachedUser);
+        }
+      }
+
+      setReady(true);
+    };
+
+    initAuth();
+
+    const onExpired = () => {
+      localStorage.removeItem(USER_STORAGE_KEY);
+      setUser(null);
+      setTokenState(null);
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
   }, []);
 
-  const login: Ctx["login"] = (username, password) => {
-    const found = DEMO_USERS.find(
-      (u) => u.username === username.trim().toLowerCase() && u.password === password,
-    );
-    if (!found) return { ok: false, error: "Invalid username or password" };
-    const u: AuthUser = { id: found.id, name: found.name, username: found.username, role: found.role };
-    localStorage.setItem(KEY, JSON.stringify(u));
-    setUser(u);
-    return { ok: true };
+  const login: Ctx["login"] = async (username, password) => {
+    const cleanUser = username.trim().toLowerCase();
+    const cleanPassword = password.trim();
+
+    if (!cleanUser || !cleanPassword) {
+      return { ok: false, error: "Nama pengguna dan kata sandi wajib diisi" };
+    }
+
+    const res = await apiFetch<{ ok: boolean; token: string; user: AuthUser }>("api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ username: cleanUser, password: cleanPassword }),
+      timeoutMs: 5000,
+    });
+
+    if (res.ok && res.data?.token && res.data?.user) {
+      const u = res.data.user;
+      const t = res.data.token;
+      setAuthToken(t);
+      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(u));
+      setUser(u);
+      setTokenState(t);
+      return { ok: true };
+    }
+
+    return {
+      ok: false,
+      error: res.error || "Nama pengguna atau kata sandi tidak cocok",
+    };
   };
 
-  const logout = () => {
-    localStorage.removeItem(KEY);
+  const logout = async () => {
+    try {
+      await apiFetch("api/auth/logout", {
+        method: "POST",
+        timeoutMs: 2000,
+      });
+    } catch {}
+    setAuthToken(null);
+    localStorage.removeItem(USER_STORAGE_KEY);
     setUser(null);
+    setTokenState(null);
   };
 
   const hasRole = (roles: Role[]) => !!user && roles.includes(user.role);
 
-  return <AuthCtx.Provider value={{ user, ready, login, logout, hasRole }}>{children}</AuthCtx.Provider>;
+  return (
+    <AuthCtx.Provider value={{ user, token, ready, login, logout, hasRole }}>
+      {children}
+    </AuthCtx.Provider>
+  );
 }
 
 export function useAuth() {
   const v = useContext(AuthCtx);
-  if (!v) throw new Error("useAuth must be inside AuthProvider");
+  if (!v) throw new Error("useAuth harus berada di dalam AuthProvider");
   return v;
 }
 
 export const ROLE_LABELS: Record<Role, string> = {
-  operator: "Operator",
-  supervisor: "Supervisor",
-  owner: "Owner",
+  operator: "Operator Sortasi",
+  supervisor: "Supervisor QC",
+  owner: "Pemilik (Owner)",
 };
 
 export const ROLE_COLORS: Record<Role, string> = {
@@ -75,5 +149,3 @@ export const ROLE_COLORS: Record<Role, string> = {
   supervisor: "bg-violet-50 text-violet-700 border-violet-200",
   owner: "bg-amber-50 text-amber-700 border-amber-200",
 };
-
-export { DEMO_USERS };

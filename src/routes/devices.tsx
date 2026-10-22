@@ -6,7 +6,15 @@ import { LineChart, Line, ResponsiveContainer } from "recharts";
 import { format, formatDistanceToNow, startOfDay, subDays } from "date-fns";
 import { PageLayout } from "@/components/buahsafe/Layout";
 import { DeviceStatusPill } from "@/components/buahsafe/StatusBadge";
-import { ensureSeed, getDevices, getScans, DEVICE_COLORS, Device, ScanRecord } from "@/lib/buahsafe-data";
+import {
+  getDevices,
+  getScans,
+  syncDevices,
+  syncScans,
+  DEVICE_COLORS,
+  Device,
+  ScanRecord,
+} from "@/lib/buahsafe-data";
 
 export const Route = createFileRoute("/devices")({ component: DevicesPage });
 
@@ -15,10 +23,14 @@ function DevicesPage() {
   const [scans, setScans] = useState<ScanRecord[]>([]);
 
   useEffect(() => {
-    ensureSeed();
-    const update = () => { setDevices(getDevices()); setScans(getScans()); };
+    const update = () => {
+      setDevices(getDevices());
+      setScans(getScans());
+    };
+    const sync = () => syncDevices().then(syncScans).then(update);
     update();
-    const i = setInterval(update, 5000);
+    sync();
+    const i = setInterval(sync, 10_000);
     return () => clearInterval(i);
   }, []);
 
@@ -28,14 +40,16 @@ function DevicesPage() {
 
   return (
     <PageLayout
-      title="Device Management"
-      subtitle="Monitor and manage your BuahSafe scanner fleet"
+      title="Perangkat Pemindai"
+      subtitle="Pantau dan kelola seluruh armada alat pemindai BuahSafe"
       roles={["supervisor", "owner"]}
     >
       <div className="text-sm text-muted-foreground mb-6">
-        <span className="font-medium text-foreground">{devices.length} devices</span>
-        {" · "}<span className="text-emerald-600">{online} online</span>
-        {" · "}<span className="text-slate-500">{offline} offline</span>
+        <span className="font-medium text-foreground">{devices.length} perangkat</span>
+        {" · "}
+        <span className="text-emerald-600">{online} aktif</span>
+        {" · "}
+        <span className="text-slate-500">{offline} terputus</span>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -60,12 +74,12 @@ function DevicesPage() {
             <motion.div
               key={d.id}
               initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: isOffline ? 0.7 : 1, y: 0 }}
+              animate={{ opacity: isOffline ? 0.75 : 1, y: 0 }}
               transition={{ delay: i * 0.08 }}
               className="rounded-xl border border-border bg-card shadow-sm p-5"
             >
               <div className="flex items-center justify-between">
-                <span className={`px-2 py-0.5 rounded-md text-[11px] font-mono border ${DEVICE_COLORS[d.id]}`}>
+                <span className={`px-2 py-0.5 rounded-md text-[11px] font-mono border ${DEVICE_COLORS[d.id] || "bg-muted text-muted-foreground"}`}>
                   {d.id}
                 </span>
                 <div className="flex items-center gap-2">
@@ -82,26 +96,30 @@ function DevicesPage() {
               </div>
 
               {isOffline && (
-                <div className="mt-3 px-3 py-2 rounded-md bg-amber-50 text-amber-700 text-xs border border-amber-200">
-                  ⚠ Last seen {formatDistanceToNow(new Date(d.lastSeen), { addSuffix: true })}
+                <div className="mt-3 px-3 py-2 rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-300 text-xs border border-amber-500/20">
+                  ⚠ Terakhir aktif {formatDistanceToNow(new Date(d.lastSeen), { addSuffix: true })}
                 </div>
               )}
 
               <div className="my-4 border-t border-border" />
 
               <div className="grid grid-cols-2 gap-4">
-                <Stat label="Total Scans" value={d.totalScans.toLocaleString()} />
-                <Stat label="Today" value={todayCount.toString()} />
-                <Stat label="Pass Rate" value={`${passRate}%`} />
-                <Stat label="Last Active" value={formatDistanceToNow(new Date(d.lastSeen), { addSuffix: true })} small />
+                <Stat label="Total Pindaian" value={d.totalScans.toLocaleString()} />
+                <Stat label="Hari Ini" value={todayCount.toString()} />
+                <Stat label="Kelolosan" value={`${passRate}%`} />
+                <Stat label="Terakhir Aktif" value={formatDistanceToNow(new Date(d.lastSeen), { addSuffix: true })} small />
               </div>
 
               <div className="mt-4 h-12">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={sparkData}>
                     <Line
-                      type="monotone" dataKey="v" stroke={isOffline ? "#94A3B8" : "#10B981"}
-                      strokeWidth={2} dot={false} isAnimationActive={true}
+                      type="monotone"
+                      dataKey="v"
+                      stroke={isOffline ? "#94A3B8" : "#10B981"}
+                      strokeWidth={2}
+                      dot={false}
+                      isAnimationActive={true}
                     />
                   </LineChart>
                 </ResponsiveContainer>
@@ -110,14 +128,14 @@ function DevicesPage() {
               <div className="mt-4 pt-4 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
                 <div>
                   <div>Firmware {d.firmwareVersion}</div>
-                  <div className="mt-0.5">Installed {format(new Date(d.installDate), "d MMM yyyy")}</div>
+                  <div className="mt-0.5">Pemasangan {format(new Date(d.installDate), "d MMM yyyy")}</div>
                 </div>
                 <Link
                   to="/history"
                   search={{ device: d.id }}
-                  className="px-3 py-1.5 rounded-md border border-border bg-card hover:bg-accent text-foreground font-medium"
+                  className="px-3 py-1.5 rounded-md border border-border bg-card hover:bg-accent text-foreground font-medium text-xs"
                 >
-                  View History
+                  Lihat Riwayat
                 </Link>
               </div>
             </motion.div>

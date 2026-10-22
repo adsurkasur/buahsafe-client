@@ -1,7 +1,14 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
-  LayoutDashboard, Cpu, ClipboardList, Leaf, Activity,
-  ScanLine, BarChart3, Database, LogOut,
+  LayoutDashboard,
+  Cpu,
+  ClipboardList,
+  Leaf,
+  Activity,
+  ScanLine,
+  BarChart3,
+  Database,
+  LogOut,
 } from "lucide-react";
 import { getDevices } from "@/lib/buahsafe-data";
 import { useEffect, useState } from "react";
@@ -15,12 +22,12 @@ interface NavItem {
 }
 
 const ALL_ITEMS: NavItem[] = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard, roles: ["supervisor", "owner"] },
-  { to: "/scan", label: "Scan", icon: ScanLine, roles: ["operator"] },
-  { to: "/devices", label: "Devices", icon: Cpu, roles: ["supervisor", "owner"] },
-  { to: "/history", label: "History", icon: ClipboardList, roles: ["operator", "supervisor", "owner"] },
-  { to: "/analytics", label: "Analytics", icon: BarChart3, roles: ["supervisor", "owner"] },
-  { to: "/master-data", label: "Master Data", icon: Database, roles: ["owner"] },
+  { to: "/", label: "Ringkasan", icon: LayoutDashboard, roles: ["supervisor", "owner"] },
+  { to: "/scan", label: "Pemindaian", icon: ScanLine, roles: ["operator"] },
+  { to: "/devices", label: "Perangkat", icon: Cpu, roles: ["supervisor", "owner"] },
+  { to: "/history", label: "Riwayat Sortasi", icon: ClipboardList, roles: ["operator", "supervisor", "owner"] },
+  { to: "/analytics", label: "Analitik", icon: BarChart3, roles: ["supervisor", "owner"] },
+  { to: "/master-data", label: "Data Master", icon: Database, roles: ["owner"] },
 ];
 
 function useVisibleItems() {
@@ -56,7 +63,7 @@ export function AppSidebar() {
         </div>
         <div>
           <div className="font-semibold text-[15px] tracking-tight">BuahSafe</div>
-          <div className="text-[11px] text-muted-foreground -mt-0.5">Quality Intelligence</div>
+          <div className="text-[11px] text-muted-foreground -mt-0.5">Sistem Inspeksi Mutu</div>
         </div>
       </div>
 
@@ -89,10 +96,10 @@ export function AppSidebar() {
         <div className="rounded-lg border border-border p-3 bg-card">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Activity className="w-3.5 h-3.5 text-primary" />
-            System Status
+            Status Armada
           </div>
           <div className="mt-1.5 text-sm font-semibold">
-            {counts.online} / {counts.total} devices online
+            {counts.online} / {counts.total} perangkat aktif
           </div>
           <div className="mt-2 h-1 rounded-full bg-secondary overflow-hidden">
             <div
@@ -104,7 +111,7 @@ export function AppSidebar() {
 
         {user && (
           <div className="rounded-lg border border-border p-3 bg-card">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-semibold">
                 {user.name.split(" ").map((s) => s[0]).slice(0, 2).join("")}
               </div>
@@ -114,14 +121,14 @@ export function AppSidebar() {
                   {ROLE_LABELS[user.role]}
                 </span>
               </div>
-              <button
-                onClick={logout}
-                className="w-7 h-7 rounded-md hover:bg-accent flex items-center justify-center text-muted-foreground"
-                title="Logout"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-              </button>
             </div>
+            <button
+              onClick={logout}
+              className="mt-2.5 w-full h-8 rounded-md border border-border hover:bg-accent flex items-center justify-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Keluar / Ganti Akun</span>
+            </button>
           </div>
         )}
       </div>
@@ -131,25 +138,34 @@ export function AppSidebar() {
 
 export function MobileNav() {
   const path = useRouterState({ select: (s) => s.location.pathname });
-  const items = useVisibleItems().slice(0, 5);
+  const { logout } = useAuth();
+  const items = useVisibleItems().slice(0, 4);
   if (items.length === 0) return null;
   return (
-    <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-card border-t border-border flex">
+    <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-card border-t border-border flex items-center">
       {items.map((item) => {
         const active = item.to === "/" ? path === "/" : path.startsWith(item.to);
         return (
           <Link
             key={item.to}
             to={item.to}
-            className={`flex-1 flex flex-col items-center gap-1 py-2.5 text-[11px] ${
+            className={`flex-1 flex flex-col items-center gap-1 py-2 text-[11px] ${
               active ? "text-primary" : "text-muted-foreground"
             }`}
           >
-            <item.icon className="w-5 h-5" />
-            {item.label}
+            <item.icon className="w-4 h-4" />
+            <span className="truncate">{item.label}</span>
           </Link>
         );
       })}
+      <button
+        onClick={logout}
+        className="flex-1 flex flex-col items-center gap-1 py-2 text-[11px] text-muted-foreground hover:text-foreground"
+        title="Keluar"
+      >
+        <LogOut className="w-4 h-4" />
+        <span>Keluar</span>
+      </button>
     </nav>
   );
 }

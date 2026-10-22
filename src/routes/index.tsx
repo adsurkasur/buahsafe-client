@@ -1,18 +1,34 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { toast } from "sonner";
 import {
-  ScanLine, ShieldCheck, AlertTriangle, Wifi, ArrowUpRight, ArrowDownRight,
+  ScanLine,
+  ShieldCheck,
+  AlertTriangle,
+  Wifi,
+  ArrowUpRight,
+  ArrowDownRight,
 } from "lucide-react";
 import {
-  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
 } from "recharts";
 import { format, formatDistanceToNow, startOfDay, subDays } from "date-fns";
 import { PageLayout } from "@/components/buahsafe/Layout";
 import { ResultBadge, DeviceStatusPill } from "@/components/buahsafe/StatusBadge";
 import {
-  ensureSeed, getDevices, getScans, addScan, DEVICE_COLORS, ScanRecord, Device,
+  getDevices,
+  getScans,
+  syncDevices,
+  syncScans,
+  DEVICE_COLORS,
+  ScanRecord,
+  Device,
 } from "@/lib/buahsafe-data";
 
 export const Route = createFileRoute("/")({
@@ -38,18 +54,32 @@ function useCountUp(target: number, duration = 800) {
 }
 
 function StatCard({
-  index, title, value, suffix, icon: Icon, accent, trend,
+  index,
+  title,
+  value,
+  displayValue,
+  subtitle,
+  suffix,
+  icon: Icon,
+  accent,
+  trend,
 }: {
-  index: number; title: string; value: number; suffix?: string;
-  icon: React.ElementType; accent: "emerald" | "rose" | "amber" | "slate";
+  index: number;
+  title: string;
+  value: number;
+  displayValue?: string;
+  subtitle?: string;
+  suffix?: string;
+  icon: React.ElementType;
+  accent: "emerald" | "rose" | "amber" | "slate";
   trend?: { dir: "up" | "down"; pct: number };
 }) {
   const v = useCountUp(value);
   const accentMap = {
-    emerald: "bg-emerald-50 text-emerald-600",
-    rose: "bg-rose-50 text-rose-600",
-    amber: "bg-amber-50 text-amber-600",
-    slate: "bg-slate-100 text-slate-600",
+    emerald: "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400",
+    rose: "bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400",
+    amber: "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400",
+    slate: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
   };
   return (
     <motion.div
@@ -66,16 +96,20 @@ function StatCard({
       </div>
       <div className="mt-4 flex items-baseline gap-2">
         <div className="text-3xl font-semibold tracking-tight">
-          {v}{suffix}
+          {displayValue ?? `${v}${suffix ?? ""}`}
         </div>
         {trend && (
-          <div className={`flex items-center text-xs font-medium ${trend.dir === "up" ? "text-emerald-600" : "text-rose-600"}`}>
+          <div
+            className={`flex items-center text-xs font-medium ${
+              trend.dir === "up" ? "text-emerald-600" : "text-rose-600"
+            }`}
+          >
             {trend.dir === "up" ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
             {trend.pct.toFixed(1)}%
           </div>
         )}
       </div>
-      <div className="mt-1 text-xs text-muted-foreground">vs yesterday</div>
+      <div className="mt-1 text-xs text-muted-foreground">{subtitle ?? "dibandingkan hari kemarin"}</div>
     </motion.div>
   );
 }
@@ -85,28 +119,21 @@ function Dashboard() {
   const [devices, setDevices] = useState<Device[]>([]);
 
   useEffect(() => {
-    ensureSeed();
     setScans(getScans());
     setDevices(getDevices());
-  }, []);
 
-  // Auto simulation
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
-    const tick = () => {
-      const newScan = addScan();
-      setScans(getScans());
+    // Sinkronisasi berkala dari server backend
+    const sync = async () => {
+      await syncDevices();
+      setScans(await syncScans());
       setDevices(getDevices());
-      toast(`New scan received from ${newScan.deviceName}`, {
-        description: `${newScan.result} · ${newScan.confidence}% confidence`,
-      });
-      timer = setTimeout(tick, (Math.random() * 5 + 7) * 1000);
     };
-    timer = setTimeout(tick, 8000);
-    return () => clearTimeout(timer);
+    sync();
+    const interval = setInterval(sync, 10_000);
+    return () => clearInterval(interval);
   }, []);
 
-  // metrics
+  // Metrik hari ini
   const today0 = startOfDay(new Date()).getTime();
   const yest0 = startOfDay(subDays(new Date(), 1)).getTime();
 
@@ -125,12 +152,12 @@ function Dashboard() {
   const passYest = yestScans.length ? (normalYest / yestScans.length) * 100 : 0;
   const anomYest = yestScans.length - normalYest;
 
-  const passTrend = passYest ? passToday - passYest : 0;
+  const passTrend = yestScans.length ? passToday - passYest : 0;
   const anomTrend = anomYest ? ((anomToday - anomYest) / anomYest) * 100 : 0;
 
   const activeDevices = devices.filter((d) => d.status !== "offline").length;
 
-  // 7-day trend
+  // Tren 7 hari terakhir
   const trend7 = Array.from({ length: 7 }).map((_, i) => {
     const day = startOfDay(subDays(new Date(), 6 - i));
     const next = day.getTime() + 86400000;
@@ -141,7 +168,7 @@ function Dashboard() {
     const n = dayScans.filter((s) => s.result === "NORMAL").length;
     const a = dayScans.length - n;
     return {
-      day: format(day, "EEE"),
+      day: format(day, "d MMM"),
       NORMAL: n,
       ANOMALI: a,
       passRate: dayScans.length ? Math.round((n / dayScans.length) * 100) : 0,
@@ -150,57 +177,98 @@ function Dashboard() {
 
   const recent = [...scans].sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 8);
 
+  const totalScansAll = scans.length;
+  const normalScansAll = scans.filter((s) => s.result === "NORMAL").length;
+  const cumulativePassRate = totalScansAll ? Math.round((normalScansAll / totalScansAll) * 100) : 0;
+
   return (
-    <PageLayout title="Dashboard" subtitle="Real-time fleet quality intelligence" roles={["supervisor", "owner"]}>
+    <PageLayout
+      title="Ringkasan Operasional"
+      subtitle="Pantauan mutu spektroskopi dan performa sortasi waktu nyata"
+      roles={["supervisor", "owner"]}
+    >
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard index={0} title="Total Scans Today" value={totalToday} icon={ScanLine} accent="slate" />
         <StatCard
-          index={1} title="Pass Rate Today" value={Math.round(passToday)} suffix="%"
-          icon={ShieldCheck} accent="emerald"
-          trend={yestScans.length ? { dir: passTrend >= 0 ? "up" : "down", pct: Math.abs(passTrend) } : undefined}
+          index={0}
+          title="Total Pindaian Hari Ini"
+          value={totalToday}
+          subtitle={totalToday > 0 ? "dibandingkan hari kemarin" : "Belum ada pindaian sesi hari ini"}
+          icon={ScanLine}
+          accent="slate"
         />
         <StatCard
-          index={2} title="Anomalies Detected" value={anomToday} icon={AlertTriangle} accent="rose"
-          trend={anomYest ? { dir: anomTrend <= 0 ? "up" : "down", pct: Math.abs(anomTrend) } : undefined}
+          index={1}
+          title="Tingkat Kelolosan Mutu"
+          value={Math.round(passToday)}
+          displayValue={totalToday > 0 ? `${Math.round(passToday)}%` : totalScansAll > 0 ? `${cumulativePassRate}%*` : "—"}
+          subtitle={
+            totalToday > 0
+              ? "dibandingkan hari kemarin"
+              : totalScansAll > 0
+                ? "*Belum ada pindaian hari ini; angka = rata-rata seluruh riwayat"
+                : "Belum ada data sortasi"
+          }
+          icon={ShieldCheck}
+          accent="emerald"
+          trend={totalToday > 0 && yestScans.length ? { dir: passTrend >= 0 ? "up" : "down", pct: Math.abs(passTrend) } : undefined}
         />
         <StatCard
-          index={3} title="Active Devices" value={activeDevices} suffix={` / ${devices.length}`}
-          icon={Wifi} accent={activeDevices === devices.length ? "emerald" : "amber"}
+          index={2}
+          title="Anomali Terdeteksi"
+          value={anomToday}
+          subtitle={totalToday > 0 ? "dibandingkan hari kemarin" : "Belum ada temuan hari ini"}
+          icon={AlertTriangle}
+          accent="rose"
+          trend={totalToday > 0 && anomYest ? { dir: anomTrend <= 0 ? "up" : "down", pct: Math.abs(anomTrend) } : undefined}
+        />
+        <StatCard
+          index={3}
+          title="Armada Aktif"
+          value={activeDevices}
+          suffix={` / ${devices.length}`}
+          subtitle={`${devices.length - activeDevices} perangkat nonaktif`}
+          icon={Wifi}
+          accent={activeDevices === devices.length ? "emerald" : "amber"}
         />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 mt-6">
-        {/* Live feed */}
+        {/* Feed pindaian langsung */}
         <div className="lg:col-span-3 rounded-xl border border-border bg-card shadow-sm">
           <div className="px-5 py-4 border-b border-border flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="relative flex w-2 h-2">
-                <span className="absolute inset-0 rounded-full bg-emerald-500 pulse-dot" />
+                <span className="absolute inset-0 rounded-full bg-emerald-500 animate-ping opacity-75" />
                 <span className="relative w-2 h-2 rounded-full bg-emerald-500" />
               </span>
-              <h3 className="font-semibold text-sm">Live Scan Feed</h3>
+              <h3 className="font-semibold text-sm">Aktivitas Pemindaian Terbaru</h3>
             </div>
-            <Link to="/history" className="text-xs text-primary hover:underline">View all →</Link>
+            <Link to="/history" className="text-xs text-primary hover:underline font-medium">
+              Lihat semua riwayat →
+            </Link>
           </div>
           <div className="divide-y divide-border">
+            {recent.length === 0 && (
+              <div className="px-5 py-12 text-center text-sm text-muted-foreground">
+                Belum ada pindaian tercatat. Hasil dari meja sortasi akan muncul di sini.
+              </div>
+            )}
             <AnimatePresence initial={false}>
               {recent.map((s) => (
                 <motion.div
                   key={s.id}
                   layout
-                  initial={{ opacity: 0, y: -10, height: 0 }}
-                  animate={{ opacity: 1, y: 0, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.3 }}
-                  className="px-5 py-3 flex items-center gap-4"
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="px-5 py-3 flex items-center gap-4 hover:bg-accent/40 transition-colors"
                 >
-                  <span className={`px-2 py-0.5 rounded-md text-[11px] font-mono border ${DEVICE_COLORS[s.deviceId]}`}>
+                  <span className={`px-2 py-0.5 rounded-md text-[11px] font-mono border ${DEVICE_COLORS[s.deviceId] || "bg-muted text-muted-foreground"}`}>
                     {s.deviceId}
                   </span>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate">{s.deviceName}</div>
+                    <div className="text-sm font-medium truncate font-mono">{s.fruitId || s.batchId}</div>
                     <div className="text-xs text-muted-foreground">
-                      {formatDistanceToNow(new Date(s.timestamp), { addSuffix: true })}
+                      {formatDistanceToNow(new Date(s.timestamp), { addSuffix: true })} · {s.deviceName}
                     </div>
                   </div>
                   <div className="hidden sm:flex items-center gap-2 w-32">
@@ -210,7 +278,7 @@ function Dashboard() {
                         style={{ width: `${s.confidence}%` }}
                       />
                     </div>
-                    <div className="text-xs text-muted-foreground tabular-nums">{s.confidence}%</div>
+                    <div className="text-xs text-muted-foreground tabular-nums font-mono">{s.confidence}%</div>
                   </div>
                   <ResultBadge result={s.result} />
                 </motion.div>
@@ -219,10 +287,10 @@ function Dashboard() {
           </div>
         </div>
 
-        {/* Fleet status */}
+        {/* Status Armada Meja Sortasi */}
         <div className="lg:col-span-2 rounded-xl border border-border bg-card shadow-sm">
           <div className="px-5 py-4 border-b border-border">
-            <h3 className="font-semibold text-sm">Fleet Status</h3>
+            <h3 className="font-semibold text-sm">Status Armada Pemindai</h3>
           </div>
           <div className="p-3 space-y-2">
             {devices.map((d) => {
@@ -234,7 +302,7 @@ function Dashboard() {
                   className="block p-3 rounded-lg border border-border hover:bg-accent transition-colors"
                 >
                   <div className="flex items-center justify-between">
-                    <span className={`px-2 py-0.5 rounded-md text-[11px] font-mono border ${DEVICE_COLORS[d.id]}`}>
+                    <span className={`px-2 py-0.5 rounded-md text-[11px] font-mono border ${DEVICE_COLORS[d.id] || "bg-muted text-muted-foreground"}`}>
                       {d.id}
                     </span>
                     <DeviceStatusPill status={d.status} />
@@ -245,7 +313,7 @@ function Dashboard() {
                     <span className="text-muted-foreground">
                       {formatDistanceToNow(new Date(d.lastSeen), { addSuffix: true })}
                     </span>
-                    <span className="font-medium tabular-nums">{todayCount} today</span>
+                    <span className="font-medium tabular-nums">{todayCount} pindaian hari ini</span>
                   </div>
                 </Link>
               );
@@ -254,11 +322,11 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* Trend chart */}
+      {/* Grafik Tren 7 Hari */}
       <div className="mt-6 rounded-xl border border-border bg-card shadow-sm">
         <div className="px-5 py-4 border-b border-border">
-          <h3 className="font-semibold text-sm">Scan Activity — Last 7 Days</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">Daily NORMAL vs ANOMALI distribution</p>
+          <h3 className="font-semibold text-sm">Aktivitas Pemindaian — 7 Hari Terakhir</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">Distribusi perbandingan buah NORMAL vs ANOMALI</p>
         </div>
         <div className="p-5 h-[300px]">
           <ResponsiveContainer width="100%" height="100%">
@@ -283,10 +351,10 @@ function Dashboard() {
                   return (
                     <div className="rounded-lg border border-border bg-card shadow-md p-3 text-xs">
                       <div className="font-medium mb-1">{label}</div>
-                      <div className="text-emerald-600">Normal: {d.NORMAL}</div>
-                      <div className="text-rose-600">Anomali: {d.ANOMALI}</div>
+                      <div className="text-emerald-600 font-semibold">Normal: {d.NORMAL}</div>
+                      <div className="text-rose-600 font-semibold">Anomali: {d.ANOMALI}</div>
                       <div className="text-muted-foreground mt-1 pt-1 border-t border-border">
-                        Pass rate: {d.passRate}%
+                        Tingkat Kelolosan: {d.passRate}%
                       </div>
                     </div>
                   );

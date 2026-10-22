@@ -30,8 +30,8 @@ function buildNotifications(): NotifItem[] {
       items.push({
         id: `a-${s.id}`,
         kind: "anomali",
-        title: `Anomali detected on ${s.deviceId}`,
-        desc: `${s.deviceName} · ${s.confidence}% confidence`,
+        title: `Anomali terdeteksi di ${s.deviceId}`,
+        desc: `${s.deviceName} · Keyakinan ${s.confidence}%`,
         ts: s.timestamp,
         href: "/history",
         search: { result: "ANOMALI", device: s.deviceId },
@@ -45,8 +45,8 @@ function buildNotifications(): NotifItem[] {
       items.push({
         id: `o-${d.id}`,
         kind: "offline",
-        title: `${d.id} is offline`,
-        desc: `${d.name} · last seen ${formatDistanceToNow(new Date(d.lastSeen), { addSuffix: true })}`,
+        title: `${d.id} terputus (offline)`,
+        desc: `${d.name} · Terakhir aktif ${formatDistanceToNow(new Date(d.lastSeen), { addSuffix: true })}`,
         ts: d.lastSeen,
         href: "/devices",
       }),
@@ -66,8 +66,8 @@ function buildNotifications(): NotifItem[] {
       items.push({
         id: `b-${batch}`,
         kind: "batch",
-        title: `New batch started`,
-        desc: batch,
+        title: `Batch baru dimulai`,
+        desc: `Kode batch: ${batch}`,
         ts,
         href: "/history",
         search: { q: batch },
@@ -120,7 +120,7 @@ export function NotificationPanel() {
       <button
         onClick={() => setOpen((v) => !v)}
         className="relative w-9 h-9 rounded-lg border border-border bg-card flex items-center justify-center hover:bg-accent"
-        aria-label="Notifications"
+        aria-label="Pemberitahuan Sistem"
       >
         <Bell className="w-4 h-4" />
         {unread > 0 && (
@@ -132,13 +132,13 @@ export function NotificationPanel() {
       {open && (
         <div className="absolute right-0 mt-2 w-[360px] max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-card shadow-lg z-50 overflow-hidden">
           <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-            <div className="font-semibold text-sm">Notifications</div>
-            <span className="text-xs text-muted-foreground">{items.length} active</span>
+            <div className="font-semibold text-sm">Pemberitahuan Sistem</div>
+            <span className="text-xs text-muted-foreground">{items.length} catatan</span>
           </div>
           <div className="max-h-[420px] overflow-y-auto divide-y divide-border">
             {items.length === 0 && (
               <div className="px-4 py-10 text-center text-sm text-muted-foreground">
-                You're all caught up 🎉
+                Semua pemberitahuan sudah diperiksa 🎉
               </div>
             )}
             {items.map((n) => {

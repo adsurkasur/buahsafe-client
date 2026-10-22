@@ -1,12 +1,28 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
-  BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid,
-  PieChart, Pie, Cell, Legend,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  ResponsiveContainer,
+  Tooltip,
+  CartesianGrid,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
 } from "recharts";
 import { format, startOfDay, subDays } from "date-fns";
 import { PageLayout } from "@/components/buahsafe/Layout";
-import { ensureSeed, getScans, getDevices, ScanRecord, Device } from "@/lib/buahsafe-data";
+import {
+  getScans,
+  getDevices,
+  syncDevices,
+  syncScans,
+  ScanRecord,
+  Device,
+} from "@/lib/buahsafe-data";
 
 export const Route = createFileRoute("/analytics")({ component: AnalyticsPage });
 
@@ -18,14 +34,15 @@ function AnalyticsPage() {
   const [devices, setDevices] = useState<Device[]>([]);
 
   useEffect(() => {
-    ensureSeed();
     setScans(getScans());
     setDevices(getDevices());
-    const i = setInterval(() => { setScans(getScans()); setDevices(getDevices()); }, 8000);
-    return () => clearInterval(i);
+    syncDevices().then(async (d) => {
+      setDevices(d);
+      setScans(await syncScans());
+    });
   }, []);
 
-  // 14-day pass/anomali bars
+  // Bar 14 hari
   const days = Array.from({ length: 14 }).map((_, i) => {
     const day = startOfDay(subDays(new Date(), 13 - i));
     const next = day.getTime() + 86400000;
@@ -40,8 +57,8 @@ function AnalyticsPage() {
   const total = scans.length;
   const normal = scans.filter((s) => s.result === "NORMAL").length;
   const pieData = [
-    { name: "Normal", value: normal },
-    { name: "Anomali", value: total - normal },
+    { name: "Normal (Lolos)", value: normal },
+    { name: "Anomali (Afkir)", value: total - normal },
   ];
 
   const byDevice = devices.map((d, i) => {
@@ -57,28 +74,37 @@ function AnalyticsPage() {
   });
 
   return (
-    <PageLayout title="Analytics" subtitle="Trends, distribution, and device performance" roles={["supervisor", "owner"]}>
+    <PageLayout
+      title="Analitik Mutu & Performa"
+      subtitle="Tren distribusi spektral, rasio kelolosan, dan efisiensi armada pemindai"
+      roles={["supervisor", "owner"]}
+    >
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-          <div className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Total Scans</div>
-          <div className="mt-2 text-3xl font-semibold tabular-nums">{total.toLocaleString()}</div>
+          <div className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Total Pemindaian</div>
+          <div className="mt-2 text-3xl font-semibold tabular-nums">{total.toLocaleString()} buah</div>
+          <div className="mt-1 text-xs text-muted-foreground">Akumulasi pemindaian seluruh meja sortasi</div>
         </div>
         <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-          <div className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Overall Pass Rate</div>
+          <div className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Kelolosan Keseluruhan</div>
           <div className="mt-2 text-3xl font-semibold tabular-nums text-emerald-600">
             {total ? Math.round((normal / total) * 100) : 0}%
           </div>
+          <div className="mt-1 text-xs text-muted-foreground">Memenuhi standar mutu kemasan Grade A</div>
         </div>
         <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-          <div className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Anomalies</div>
-          <div className="mt-2 text-3xl font-semibold tabular-nums text-rose-600">{(total - normal).toLocaleString()}</div>
+          <div className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Anomali Terdeteksi</div>
+          <div className="mt-2 text-3xl font-semibold tabular-nums text-rose-600">
+            {(total - normal).toLocaleString()} buah
+          </div>
+          <div className="mt-1 text-xs text-muted-foreground">Berhasil dicegah dari klaim retur pembeli</div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-6">
         <div className="lg:col-span-2 rounded-xl border border-border bg-card shadow-sm">
           <div className="px-5 py-4 border-b border-border">
-            <h3 className="font-semibold text-sm">Daily Distribution — Last 14 Days</h3>
+            <h3 className="font-semibold text-sm">Distribusi Harian — 14 Hari Terakhir</h3>
           </div>
           <div className="p-5 h-[320px]">
             <ResponsiveContainer width="100%" height="100%">
@@ -87,8 +113,8 @@ function AnalyticsPage() {
                 <XAxis dataKey="day" stroke="#64748B" fontSize={11} tickLine={false} axisLine={false} />
                 <YAxis stroke="#64748B" fontSize={11} tickLine={false} axisLine={false} />
                 <Tooltip cursor={{ fill: "#F1F5F9" }} />
-                <Bar dataKey="NORMAL" stackId="a" fill="#10B981" radius={[0, 0, 0, 0]} />
-                <Bar dataKey="ANOMALI" stackId="a" fill="#F43F5E" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="NORMAL" stackId="a" fill="#10B981" radius={[0, 0, 0, 0]} name="Normal" />
+                <Bar dataKey="ANOMALI" stackId="a" fill="#F43F5E" radius={[4, 4, 0, 0]} name="Anomali" />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -96,13 +122,24 @@ function AnalyticsPage() {
 
         <div className="rounded-xl border border-border bg-card shadow-sm">
           <div className="px-5 py-4 border-b border-border">
-            <h3 className="font-semibold text-sm">Result Mix</h3>
+            <h3 className="font-semibold text-sm">Proporsi Hasil Sortasi</h3>
           </div>
           <div className="p-5 h-[320px]">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={55} outerRadius={90} paddingAngle={2}>
-                  {pieData.map((_, i) => <Cell key={i} fill={COLORS[i]} />)}
+                <Pie
+                  data={pieData}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={55}
+                  outerRadius={90}
+                  paddingAngle={2}
+                >
+                  {pieData.map((_, i) => (
+                    <Cell key={i} fill={COLORS[i]} />
+                  ))}
                 </Pie>
                 <Tooltip />
                 <Legend />
@@ -114,7 +151,7 @@ function AnalyticsPage() {
 
       <div className="mt-6 rounded-xl border border-border bg-card shadow-sm">
         <div className="px-5 py-4 border-b border-border">
-          <h3 className="font-semibold text-sm">Device Performance</h3>
+          <h3 className="font-semibold text-sm">Performa Armada Perangkat</h3>
         </div>
         <div className="divide-y divide-border">
           {byDevice.map((d) => (
@@ -126,9 +163,9 @@ function AnalyticsPage() {
                   <div className="h-full" style={{ width: `${d.passRate}%`, background: d.color }} />
                 </div>
               </div>
-              <div className="text-right w-28">
+              <div className="text-right w-32">
                 <div className="text-sm font-semibold tabular-nums">{d.passRate}%</div>
-                <div className="text-[11px] text-muted-foreground">{d.total} scans</div>
+                <div className="text-[11px] text-muted-foreground">{d.total} pindaian</div>
               </div>
             </div>
           ))}

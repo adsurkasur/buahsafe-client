@@ -1,3 +1,13 @@
+/**
+ * BuahSafe Data Layer
+ *
+ * Mengelola data perangkat, riwayat pemindaian, dan inferensi spektral.
+ * Sumber kebenaran adalah API server backend BuahSafe; localStorage hanya cache
+ * salinan terakhir agar halaman tetap terbaca saat koneksi terputus.
+ * Tidak ada data contoh/acak: angka di dasbor harus berasal dari pindaian nyata.
+ */
+import { apiFetch } from "./api";
+
 export interface Device {
   id: string;
   name: string;
@@ -9,189 +19,153 @@ export interface Device {
   installDate: string;
 }
 
+export interface SpectralChannels {
+  nm610: number;
+  nm680: number;
+  nm730: number;
+  nm760: number;
+  nm810: number;
+  nm860: number;
+}
+
 export interface ScanRecord {
   id: string;
+  fruitId: string;
   deviceId: string;
   deviceName: string;
   timestamp: string;
   result: "NORMAL" | "ANOMALI";
   confidence: number;
-  amplitudeAvg: number;
   batchId: string;
-  operatorNote?: string;
   operatorId?: string;
+  spectral?: SpectralChannels;
 }
 
-const DEVICES_KEY = "buahsafe.devices.v1";
-const SCANS_KEY = "buahsafe.scans.v1";
+// v2: kunci baru supaya cache data acak dari versi purwarupa (v1) tidak terbaca lagi
+const DEVICES_KEY = "buahsafe.devices.v2";
+const SCANS_KEY = "buahsafe.scans.v2";
 
-const SEED_DEVICES: Device[] = [
-  {
-    id: "BSF-001",
-    name: "Meja Sortasi A",
-    location: "Lantai Produksi",
-    status: "online",
-    lastSeen: new Date().toISOString(),
-    totalScans: 0,
-    firmwareVersion: "v1.2.4",
-    installDate: new Date(Date.now() - 1000 * 60 * 60 * 24 * 120).toISOString(),
-  },
-  {
-    id: "BSF-002",
-    name: "Meja Sortasi B",
-    location: "Lantai Produksi",
-    status: "idle",
-    lastSeen: new Date(Date.now() - 1000 * 60 * 18).toISOString(),
-    totalScans: 0,
-    firmwareVersion: "v1.2.4",
-    installDate: new Date(Date.now() - 1000 * 60 * 60 * 24 * 90).toISOString(),
-  },
-  {
-    id: "BSF-003",
-    name: "Gudang Utama",
-    location: "Gudang",
-    status: "offline",
-    lastSeen: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toISOString(),
-    totalScans: 0,
-    firmwareVersion: "v1.1.9",
-    installDate: new Date(Date.now() - 1000 * 60 * 60 * 24 * 200).toISOString(),
-  },
-];
-
-function uid() {
-  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
-}
-
-function rand(min: number, max: number) {
-  return Math.random() * (max - min) + min;
-}
-function randInt(min: number, max: number) {
-  return Math.floor(rand(min, max + 1));
-}
-
-function pickDevice(): typeof SEED_DEVICES[number] {
-  const r = Math.random();
-  if (r < 0.4) return SEED_DEVICES[0];
-  if (r < 0.75) return SEED_DEVICES[1];
-  return SEED_DEVICES[2];
-}
-
-function generateSeedScans(): ScanRecord[] {
-  const scans: ScanRecord[] = [];
-  const now = Date.now();
-  let batchCounter = 1;
-  let scansInBatch = 0;
-  let currentBatch = `BATCH-2024-${String(batchCounter).padStart(3, "0")}`;
-  const batchSize = randInt(6, 10);
-
-  for (let day = 29; day >= 0; day--) {
-    const dayCount = randInt(8, 35);
-    for (let i = 0; i < dayCount; i++) {
-      const device = pickDevice();
-      // BSF-003 has no scans in last 5 days
-      if (device.id === "BSF-003" && day < 5) continue;
-
-      const hour = randInt(7, 17);
-      const minute = randInt(0, 59);
-      const ts = new Date(now - day * 86400000);
-      ts.setHours(hour, minute, randInt(0, 59), 0);
-
-      const isAnomali = Math.random() < 0.28;
-      const result: ScanRecord["result"] = isAnomali ? "ANOMALI" : "NORMAL";
-
-      if (scansInBatch >= batchSize) {
-        batchCounter++;
-        currentBatch = `BATCH-2024-${String(batchCounter).padStart(3, "0")}`;
-        scansInBatch = 0;
-      }
-      scansInBatch++;
-
-      scans.push({
-        id: uid(),
-        deviceId: device.id,
-        deviceName: device.name,
-        timestamp: ts.toISOString(),
-        result,
-        confidence: isAnomali ? randInt(55, 89) : randInt(75, 99),
-        amplitudeAvg: isAnomali ? randInt(180, 270) : randInt(280, 420),
-        batchId: currentBatch,
-      });
-
-      if (scans.length >= 300) break;
-    }
-    if (scans.length >= 300) break;
+function readCache<T>(key: string): T[] {
+  if (typeof window === "undefined") return [];
+  try {
+    return JSON.parse(localStorage.getItem(key) || "[]");
+  } catch {
+    return [];
   }
-
-  return scans.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
 }
 
-export function ensureSeed() {
-  if (typeof window === "undefined") return;
-  if (!localStorage.getItem(DEVICES_KEY)) {
-    localStorage.setItem(DEVICES_KEY, JSON.stringify(SEED_DEVICES));
-  }
-  if (!localStorage.getItem(SCANS_KEY)) {
-    const scans = generateSeedScans();
-    localStorage.setItem(SCANS_KEY, JSON.stringify(scans));
-    // update device totalScans
-    const devices = getDevices();
-    devices.forEach((d) => {
-      d.totalScans = scans.filter((s) => s.deviceId === d.id).length;
-    });
-    saveDevices(devices);
-  }
+function writeCache(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {}
 }
 
 export function getDevices(): Device[] {
-  if (typeof window === "undefined") return SEED_DEVICES;
-  ensureSeed();
-  return JSON.parse(localStorage.getItem(DEVICES_KEY) || "[]");
-}
-
-export function saveDevices(devices: Device[]) {
-  localStorage.setItem(DEVICES_KEY, JSON.stringify(devices));
+  return readCache<Device>(DEVICES_KEY);
 }
 
 export function getScans(): ScanRecord[] {
-  if (typeof window === "undefined") return [];
-  ensureSeed();
-  return JSON.parse(localStorage.getItem(SCANS_KEY) || "[]");
+  return readCache<ScanRecord>(SCANS_KEY);
 }
 
-export function saveScans(scans: ScanRecord[]) {
-  localStorage.setItem(SCANS_KEY, JSON.stringify(scans));
-}
-
-export function addScan(opts?: { operatorId?: string; deviceId?: string }): ScanRecord {
-  const available = getDevices().filter((d) => d.status !== "offline");
-  const device =
-    (opts?.deviceId && available.find((d) => d.id === opts.deviceId)) ||
-    available[randInt(0, available.length - 1)];
-  const isAnomali = Math.random() < 0.25;
-  const scans = getScans();
-  const lastBatch = scans[scans.length - 1]?.batchId || "BATCH-2024-001";
-  const scan: ScanRecord = {
-    id: uid(),
-    deviceId: device.id,
-    deviceName: device.name,
-    timestamp: new Date().toISOString(),
-    result: isAnomali ? "ANOMALI" : "NORMAL",
-    confidence: isAnomali ? randInt(55, 89) : randInt(75, 99),
-    amplitudeAvg: isAnomali ? randInt(180, 270) : randInt(280, 420),
-    batchId: lastBatch,
-    operatorId: opts?.operatorId,
-  };
-  scans.push(scan);
-  saveScans(scans);
-  // bump device totals + lastSeen
-  const allDevices = getDevices();
-  const idx = allDevices.findIndex((d) => d.id === device.id);
-  if (idx >= 0) {
-    allDevices[idx].totalScans += 1;
-    allDevices[idx].lastSeen = scan.timestamp;
-    allDevices[idx].status = "online";
-    saveDevices(allDevices);
+/**
+ * Sinkronisasi data perangkat dari backend server.
+ */
+export async function syncDevices(): Promise<Device[]> {
+  const res = await apiFetch<{ devices: any[] }>("api/devices", { timeoutMs: 3000 });
+  if (res.ok && Array.isArray(res.data?.devices)) {
+    const mapped: Device[] = res.data.devices.map((d: any) => ({
+      id: d.id,
+      name: d.name,
+      location: d.location,
+      status: d.status,
+      lastSeen: d.last_seen,
+      totalScans: d.total_scans || 0,
+      firmwareVersion: d.firmware_version || "—",
+      installDate: d.install_date || "",
+    }));
+    writeCache(DEVICES_KEY, mapped);
+    return mapped;
   }
+  return getDevices();
+}
+
+function toScanRecord(m: any, devices: Device[]): ScanRecord {
+  const deviceId = m.device_id || "BSF-001";
+  const timestamp: string = m.timestamp;
+  return {
+    id: String(m.id),
+    fruitId: m.fruit_id,
+    deviceId,
+    deviceName: devices.find((d) => d.id === deviceId)?.name || deviceId,
+    timestamp,
+    result: m.prediction,
+    confidence: Math.round(m.confidence ?? 0),
+    // Batch = hari sortasi (server belum menyimpan kode batch tersendiri)
+    batchId: `BATCH-${timestamp.slice(0, 10).replace(/-/g, "")}`,
+    operatorId: m.operator_id || undefined,
+    spectral: {
+      nm610: m.nm610 ?? 0,
+      nm680: m.nm680 ?? 0,
+      nm730: m.nm730 ?? 0,
+      nm760: m.nm760 ?? 0,
+      nm810: m.nm810 ?? 0,
+      nm860: m.nm860 ?? 0,
+    },
+  };
+}
+
+/**
+ * Sinkronisasi riwayat sortasi dari server. Hanya baris yang punya putusan model
+ * (NORMAL/ANOMALI) yang dihitung; baris akuisisi dataset riset tanpa prediksi diabaikan.
+ */
+export async function syncScans(): Promise<ScanRecord[]> {
+  // ponytail: 2000 baris terakhir; ganti ke /api/analytics + paginasi jika riwayat jauh lebih besar
+  const res = await apiFetch<{ measurements: any[] }>("api/measurements?limit=2000", {
+    timeoutMs: 5000,
+  });
+  if (!res.ok || !Array.isArray(res.data?.measurements)) return getScans();
+  const devices = getDevices();
+  const scans = res.data.measurements
+    .filter((m) => m.prediction === "NORMAL" || m.prediction === "ANOMALI")
+    .map((m) => toScanRecord(m, devices))
+    .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  writeCache(SCANS_KEY, scans);
+  return scans;
+}
+
+/**
+ * Memicu pemindaian buah lewat POST /api/scan (sensor AS7265x + model SVM di server).
+ * Gagal = lempar Error berisi pesan server. Tidak pernah membuat hasil pengganti:
+ * arahan keranjang hanya boleh berasal dari spektrum yang benar-benar diukur.
+ */
+export async function triggerScan(opts: {
+  operatorId?: string;
+  deviceId: string;
+  fruitId: string;
+}): Promise<ScanRecord> {
+  const res = await apiFetch<{
+    measurement: any;
+    prediction?: { result: "NORMAL" | "ANOMALI"; confidence: number };
+  }>("api/scan", {
+    method: "POST",
+    body: JSON.stringify({
+      fruit_id: opts.fruitId.trim().toUpperCase(),
+      device_id: opts.deviceId,
+      operator_id: opts.operatorId || "",
+    }),
+    // Firmware bisa retry hingga 3x di sisi server
+    timeoutMs: 20000,
+  });
+
+  const m = res.data?.measurement;
+  const p = res.data?.prediction;
+  if (!res.ok || !m || !p) {
+    throw new Error(res.error || "Server tidak mengembalikan hasil klasifikasi");
+  }
+
+  const scan = toScanRecord({ ...m, prediction: p.result, confidence: p.confidence }, getDevices());
+  writeCache(SCANS_KEY, [...getScans(), scan]);
   return scan;
 }
 
