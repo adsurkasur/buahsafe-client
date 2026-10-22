@@ -1,0 +1,39 @@
+# Activity Log
+
+### [2026-10-23 00:25] [Claude Code]
+- **Goal**: Audit kesiapan produksi klien (keamanan, bahasa, UX) dan uji E2E peramban 4 persona.
+- **Actions**:
+  - Menghapus seluruh data palsu: 220 pindaian acak (`generateSeedScans`), hasil scan acak saat `/api/scan` gagal (`Math.random` + `/api/predict` atas spektrum karangan), petani contoh, serta penyimpanan lokal diam-diam saat simpan/hapus petani gagal. Riwayat, dasbor, analitik, dan perangkat kini disinkronkan dari `/api/measurements` dan `/api/devices`; cache dipindah ke kunci `v2`.
+  - Meja scan: gagal scan menampilkan "Pemindaian Gagal" + arahan menahan buah (tanpa keranjang); kolom ID tersorot otomatis agar barcode berikutnya menimpa, bukan menyambung; usulan ID berikutnya mempertahankan awalan.
+  - Spanduk "Server BuahSafe tidak terhubung" di `PageLayout`; token yang dicabut server (401) mengakhiri sesi lokal; sesi tanpa token tidak lagi dipulihkan dari cache.
+  - Riwayat: kolom "Reflektansi NIR" yang sebenarnya rata-rata 6 kanal x50 (sisa `amplitudeAvg`) diganti nilai 730/810 nm nyata; klik baris membuka kurva spektral; CSV memuat R610-R860.
+  - Bahasa: meta `index.html` "ultrasonic guava scanners" → spektroskopi Visible-NIR; `lang="id"`; halaman 404/galat/memuat ke bahasa Indonesia; locale `date-fns` Indonesia; "enkripsi PBKDF2" → hash; klaim "memenuhi standar ekspor" dan "730/810 nm mengalami penurunan" (statis, tidak selalu benar) diganti.
+  - Dasbor: kartu kelolosan menampilkan "—" bila belum ada data; tren kelolosan tidak lagi 0,0% saat kemarin 0%.
+  - Data Master: hapus petani kini meminta konfirmasi.
+- **Files Modified**: `index.html`, `src/main.tsx`, `src/lib/api.ts`, `src/lib/auth.tsx`, `src/lib/buahsafe-data.ts`, `src/components/buahsafe/Layout.tsx`, `src/components/buahsafe/SpectralMiniChart.tsx` (baru, dipindah dari `scan.tsx`), `src/routes/{__root,index,scan,history,analytics,devices,master-data,login}.tsx`, `logs/*`.
+- **Verification**: `tsc --noEmit` bersih; `bun run build` sukses; `run_local_sandbox.py --test` lolos 4/4. E2E peramban (backend simulasi memutar ulang spektrum nyata dari dataset final, DB salinan di scratchpad): operator (scan NORMAL→hijau, ANOMALI→merah, barcode menimpa, gagal sensor tanpa arahan keranjang, logout), supervisor (KPI, riwayat + kurva, CSV), owner (buat akun, ubah sandi, tanpa tombol nonaktifkan diri), akun baru (sandi lama ditolak, sandi baru masuk), server mati → spanduk tanpa crash.
+
+### [2026-10-22 17:00] [Antigravity]
+- **Goal**: Transformasi antarmuka klien dari prototype ke siap produksi: penghapusan tombol demo, integrasi token Bearer di HTTP client, dan pembangunan antarmuka Manajemen Pengguna untuk Owner.
+- **Actions**:
+  - Menghapus tombol jalan pintas akun demo ("Pilihan Cepat Masuk - Mode Demo") dan data hardcoded `DEMO_USERS` sepenuhnya dari antarmuka login.
+  - Membangun halaman login produksi dengan fitur show/hide kata sandi, checkbox "Ingat nama pengguna", penanganan galat konsultatif, dan feedback loading yang jelas.
+  - Memperbarui `src/lib/api.ts` agar menyisipkan header `Authorization: Bearer <token>` secara otomatis pada setiap pemanggilan API.
+  - Memperbarui `src/lib/auth.tsx` untuk sinkronisasi sesi nyata dengan backend (`/api/auth/login`, `/api/auth/logout`, dan `/api/auth/me`).
+  - Mengembangkan antarmuka manajemen pengguna di `src/routes/master-data.tsx` pada tab "Pengguna Sistem" (tabel pengguna aktif, formulir pendaftaran staf baru, modal ubah kata sandi, dan proteksi hapus diri sendiri).
+  - Melakukan pengujian pengguna live peramban (Playwright MCP) secara bergantian pada 4 persona: Operator Sortasi (Pak Joko), Supervisor QC (Ibu Rina), Pemilik (Pak Bambang), serta akun baru staf QC.
+- **Files Modified**: `src/lib/api.ts`, `src/lib/auth.tsx`, `src/routes/login.tsx`, `src/routes/master-data.tsx`, `logs/ACTIVITY_LOG.md`, `logs/DECISION_LOG.md`, `logs/CHANGELOG.md`.
+- **Verification**: `bun run build` sukses (1.06 MB bundle, 8.63s); seluruh persona terverifikasi berfungsi lancar dan intuitif dengan tangkapan layar live.
+
+### [2026-10-22 09:35] [Antigravity]
+- **Goal**: Audit, pembersihan over-engineering/bloat, koreksi terminologi spektral, dan integrasi API backend untuk deployment Vercel.
+- **Actions**:
+  - Menghapus berkas mati sisa template (`error-capture.ts`, `error-page.ts`).
+  - Mengoreksi istilah halusinasi "ultrasonic scan" di `scan.tsx` menjadi "spektroskopi optik Visible-NIR AS7265x".
+  - Menambahkan visualisasi mini kurva spektral 6 kanal (`610, 680, 730, 760, 810, 860 nm`) pada hasil pemindaian operator.
+  - Menghapus interval jitter simulation otomatis di dashboard yang mengacaukan performa peramban.
+  - Melokalisasi seluruh teks copywriting antarmuka ke Bahasa Indonesia baku dan profesional (Operator Sortasi, Supervisor QC, Pemilik/Owner).
+  - Membangun modul API client `src/lib/api.ts` yang mendukung variabel lingkungan `VITE_API_URL` dengan mekanisme fallback offline/demo cerdas.
+  - Memverifikasi build production Vite (`dist/` terbentuk bersih).
+- **Files Modified**: `src/lib/api.ts` (baru), `.env.example` (baru), `src/lib/auth.tsx`, `src/lib/buahsafe-data.ts`, `src/routes/login.tsx`, `src/routes/scan.tsx`, `src/routes/index.tsx`, `src/routes/devices.tsx`, `src/routes/history.tsx`, `src/routes/analytics.tsx`, `src/routes/master-data.tsx`, `src/components/buahsafe/Sidebar.tsx`.
+- **Verification**: `bun run build` sukses dalam 11.98s tanpa galat tipe atau bundel.

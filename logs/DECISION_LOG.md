@@ -1,0 +1,23 @@
+# Decision Log (Architecture Decision Records)
+
+### [DEC-003] Server sebagai Satu-satunya Sumber Putusan dan Angka (menggantikan sebagian DEC-001)
+- **Date**: 2026-10-23
+- **Status**: Accepted
+- **Context**: Strategi fallback DEC-001 menghasilkan arahan keranjang dari spektrum acak bila sensor/server gagal, serta mengisi dasbor dengan 220 pindaian karangan. Di lantai sortasi, hal ini mengirim buah ke keranjang tanpa pernah diukur dan membuat KPI supervisor/owner fiktif.
+- **Decision**: Putusan NORMAL/ANOMALI hanya ditampilkan bila `/api/scan` mengembalikan prediksi. Semua angka berasal dari `/api/measurements` dan `/api/devices`; localStorage hanya cache salinan terakhir untuk mode baca saat offline, ditandai spanduk.
+- **Alternatives**: Mode demo terpisah dengan data contoh berlabel jelas. Tidak dibuat (belum ada kebutuhan); jika perlu, beri bendera build eksplisit, bukan fallback otomatis.
+- **Affected**: `src/lib/buahsafe-data.ts`, semua route yang membaca pindaian/perangkat, `PageLayout`.
+
+### [DEC-002] Elimination of Demo Account Selectors in Favor of Cryptographic Session Tokens and Owner-Governed User Management
+- **Date**: 2026-10-22
+- **Status**: Accepted
+- **Context**: Klien web sebelumnya memiliki tombol instan "Pilihan Cepat Masuk - Mode Demo" yang membocorkan akun demo statis ke layar login publik.
+- **Decision**: Menghapus tombol demo dan array `DEMO_USERS`. Login dialihkan ke endpoint server riil dengan token Bearer 24 jam. Manajemen akun sepenuhnya didelegasikan kepada Pemilik (Owner) via menu Data Master.
+- **Consequences**: Antarmuka terlihat dan berfungsi sebagai aplikasi produksi enterprise/warehouse yang aman, kredibel, dan siap audit.
+
+### [DEC-001] Client-Side Decoupling & Graceful Fallback Strategy
+- **Date**: 2026-10-22
+- **Status**: Accepted
+- **Context**: Frontend BuahSafe dirancang untuk dideploy secara independen (misalnya pada Vercel), sementara backend ML berjalan secara on-premise atau lokal pada meja sortasi kebun.
+- **Decision**: Frontend menggunakan REST client `api.ts` berbasis `fetch` standar yang membaca `VITE_API_URL`. Jika backend tidak terjangkau (misal saat demo atau koneksi terputus), sistem secara otomatis beralih ke simulasi cerdas berbasis data empiris Monev 3 tanpa crash.
+- **Consequences**: Pengalaman pengguna tetap mulus di cloud hosting maupun lingkungan pabrik lokal.
