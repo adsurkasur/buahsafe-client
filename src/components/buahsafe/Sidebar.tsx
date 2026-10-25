@@ -10,7 +10,7 @@ import {
   Database,
   LogOut,
 } from "lucide-react";
-import { getDevices } from "@/lib/buahsafe-data";
+import { getDevices, syncDevices } from "@/lib/buahsafe-data";
 import { useEffect, useState } from "react";
 import { useAuth, Role, ROLE_LABELS, ROLE_COLORS } from "@/lib/auth";
 
@@ -43,15 +43,16 @@ export function AppSidebar() {
   const items = useVisibleItems();
 
   useEffect(() => {
-    const update = () => {
-      const d = getDevices();
+    const show = (d: ReturnType<typeof getDevices>) =>
       setCounts({
         online: d.filter((x) => x.status === "online" || x.status === "idle").length,
         total: d.length,
       });
-    };
+    // Ambil dari server sendiri: operator tidak pernah membuka halaman Perangkat yang mengisi cache
+    const update = () => syncDevices().then(show);
+    show(getDevices());
     update();
-    const i = setInterval(update, 5000);
+    const i = setInterval(update, 15000);
     return () => clearInterval(i);
   }, []);
 

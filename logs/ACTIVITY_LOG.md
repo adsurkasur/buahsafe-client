@@ -1,5 +1,11 @@
 # Activity Log
 
+### [2026-10-25 23:50] [Claude Code]
+- **Goal**: Perbaikan dari uji conveyor langsung.
+- **Actions**: Panel samping kini mengambil daftar perangkat dari server sendiri (sebelumnya operator melihat "0 / 0 perangkat aktif" karena hanya membaca cache halaman Perangkat).
+- **Files Modified**: `src/components/buahsafe/Sidebar.tsx`, `logs/ACTIVITY_LOG.md`.
+- **Verification**: `tsc --noEmit` bersih; build sukses; uji conveyor di buahsafe.vercel.app 12/12, API 17/17.
+
 ### [2026-10-25 23:30] [Claude Code]
 - **Goal**: Layar operator untuk belt conveyor dan pelabelan data conveyor.
 - **Actions**: `/scan` menjadi **Antrean Conveyor** (polling 1 dtk; kartu besar buah terbaru `#NNNN` HIJAU/MERAH/GAGAL dengan arahan; daftar buah terakhir; status alat dan tanda Simulator; tombol simulasi 10 buah untuk supervisor/owner); menu tampil untuk tiga peran. Riwayat: kolom "Label Hasil Belah" (supervisor/owner, `PATCH /label`), filter "Belum dilabel", kolom label di CSV; operator kini melihat semua scan (scan conveyor tidak terikat operator). `triggerScan` dihapus.
