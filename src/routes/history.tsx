@@ -13,8 +13,10 @@ import {
   syncScans,
   DEVICE_COLORS,
   ScanRecord,
+  setScanLabel,
   WAVELENGTHS,
 } from "@/lib/buahsafe-data";
+import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 
 const searchSchema = z.object({
@@ -23,6 +25,7 @@ const searchSchema = z.object({
   q: fallback(z.string(), "").default(""),
   from: fallback(z.string(), "").default(""),
   to: fallback(z.string(), "").default(""),
+  label: fallback(z.enum(["all", "unlabeled"]), "all").default("all"),
 });
 
 export const Route = createFileRoute("/history")({
@@ -44,10 +47,21 @@ function HistoryPage() {
   }, []);
 
   const devices = getDevices();
+  const canLabel = user?.role === "supervisor" || user?.role === "owner";
+
+  const changeLabel = async (scan: ScanRecord, label: "" | "normal" | "anomali") => {
+    const res = await setScanLabel(scan.id, label);
+    if (!res.ok) {
+      toast.error("Label gagal disimpan", { description: res.error });
+      return;
+    }
+    setScans((all) => all.map((x) => (x.id === scan.id ? { ...x, label } : x)));
+    toast.success(`Label ${scan.fruitId}: ${label || "dikosongkan"}`);
+  };
 
   const filtered = useMemo(() => {
     let r = scans.slice();
-    if (user?.role === "operator") r = r.filter((s) => s.operatorId === user.id);
+    if (search.label === "unlabeled") r = r.filter((s) => !s.label);
     if (search.device !== "all") r = r.filter((s) => s.deviceId === search.device);
     if (search.result !== "all") r = r.filter((s) => s.result === search.result);
     if (search.q) {
@@ -80,9 +94,10 @@ function HistoryPage() {
   if (search.q) activeChips.push({ key: "q", label: `Cari: ${search.q}` });
   if (search.from) activeChips.push({ key: "from", label: `Mulai: ${search.from}` });
   if (search.to) activeChips.push({ key: "to", label: `Sampai: ${search.to}` });
+  if (search.label !== "all") activeChips.push({ key: "label", label: "Belum dilabel" });
 
   const clearChip = (key: string) =>
-    setParam(key, key === "device" || key === "result" ? "all" : "");
+    setParam(key, key === "device" || key === "result" || key === "label" ? "all" : "");
 
   const downloadCSV = () => {
     const headers = [
@@ -93,6 +108,7 @@ function HistoryPage() {
       "Hasil_Mutu",
       "Keyakinan_Persen",
       ...WAVELENGTHS.map((w) => `I${w}`),
+      "Label_Hasil_Belah",
     ];
     const rows = filtered.map((s) => [
       `"${s.timestamp}"`,
@@ -102,6 +118,7 @@ function HistoryPage() {
       `"${s.result}"`,
       s.confidence,
       ...WAVELENGTHS.map((w) => s.spectral?.[`nm${w}`] ?? ""),
+      `"${s.label || ""}"`,
     ]);
     const csvContent =
       "data:text/csv;charset=utf-8," +
@@ -119,8 +136,8 @@ function HistoryPage() {
     <PageLayout
       title="Riwayat Sortasi"
       subtitle={
-        user?.role === "operator"
-          ? "Riwayat pemindaian spektrum buah oleh Anda"
+        canLabel
+          ? "Telusuri riwayat dan beri label hasil belah untuk melatih ulang model"
           : "Cari, filter, dan telusuri seluruh riwayat pemindaian mutu buah"
       }
     >
@@ -160,6 +177,14 @@ function HistoryPage() {
             <option value="all">Semua Hasil</option>
             <option value="NORMAL">Normal</option>
             <option value="ANOMALI">Anomali</option>
+          </select>
+          <select
+            value={search.label}
+            onChange={(e) => setParam("label", e.target.value)}
+            className="h-9 px-3 rounded-lg border border-border bg-card text-sm"
+          >
+            <option value="all">Semua label</option>
+            <option value="unlabeled">Belum dilabel (hasil belah)</option>
           </select>
           <div className="relative flex-1 min-w-[180px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -226,6 +251,7 @@ function HistoryPage() {
                 <th className="px-4 py-3 text-left font-medium">Hasil Klasifikasi</th>
                 <th className="px-4 py-3 text-left font-medium">Tingkat Keyakinan</th>
                 <th className="px-4 py-3 text-left font-medium">Intensitas Transmisi 730 / 810 nm</th>
+                <th className="px-4 py-3 text-left font-medium">Label Hasil Belah</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -265,10 +291,26 @@ function HistoryPage() {
                   <td className="px-4 py-3 tabular-nums font-mono text-xs">
                     {s.spectral ? `${s.spectral.nm730.toFixed(2)} / ${s.spectral.nm810.toFixed(2)}` : "—"}
                   </td>
+                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                    {canLabel ? (
+                      <select
+                        value={s.label || ""}
+                        onChange={(e) => changeLabel(s, e.target.value as "" | "normal" | "anomali")}
+                        className="h-8 px-2 rounded-md border border-border bg-background text-xs"
+                        aria-label={`Label hasil belah ${s.fruitId}`}
+                      >
+                        <option value="">Belum dibelah</option>
+                        <option value="normal">Normal</option>
+                        <option value="anomali">Anomali</option>
+                      </select>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">{s.label || "—"}</span>
+                    )}
+                  </td>
                 </tr>
                 {openId === s.id && (
                   <tr>
-                    <td colSpan={6} className="px-4 pb-4">
+                    <td colSpan={7} className="px-4 pb-4">
                       <SpectralMiniChart spectral={s.spectral} result={s.result} />
                     </td>
                   </tr>
@@ -277,7 +319,7 @@ function HistoryPage() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
+                  <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
                     Tidak ada data yang sesuai dengan filter pencarian.
                   </td>
                 </tr>

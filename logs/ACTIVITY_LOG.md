@@ -1,5 +1,11 @@
 # Activity Log
 
+### [2026-10-25 23:30] [Claude Code]
+- **Goal**: Layar operator untuk belt conveyor dan pelabelan data conveyor.
+- **Actions**: `/scan` menjadi **Antrean Conveyor** (polling 1 dtk; kartu besar buah terbaru `#NNNN` HIJAU/MERAH/GAGAL dengan arahan; daftar buah terakhir; status alat dan tanda Simulator; tombol simulasi 10 buah untuk supervisor/owner); menu tampil untuk tiga peran. Riwayat: kolom "Label Hasil Belah" (supervisor/owner, `PATCH /label`), filter "Belum dilabel", kolom label di CSV; operator kini melihat semua scan (scan conveyor tidak terikat operator). `triggerScan` dihapus.
+- **Files Modified**: `src/routes/{scan,history}.tsx`, `src/lib/buahsafe-data.ts`, `src/components/buahsafe/Sidebar.tsx`, `logs/*`.
+- **Verification**: `tsc --noEmit` bersih; `bun run build` sukses. Uji langsung di buahsafe.vercel.app: `../LAPORAN_UJI_PENUH_2026-10-25.md`.
+
 ### [2026-10-25 21:30] [Claude Code]
 - **Goal**: Klien siap diuji penuh di `buahsafe.vercel.app` dengan model 18 kanal dan istilah fisika yang benar.
 - **Actions**:

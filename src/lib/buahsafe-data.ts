@@ -34,6 +34,8 @@ export interface ScanRecord {
   batchId: string;
   operatorId?: string;
   spectral?: SpectralChannels;
+  /** Kunci jawaban setelah buah dibelah: "", "normal", atau "anomali" */
+  label?: string;
 }
 
 // v3: cache v1 berisi data acak purwarupa, v2 hanya 6 kanal
@@ -99,6 +101,7 @@ function toScanRecord(m: any, devices: Device[]): ScanRecord {
     // Batch = hari sortasi (server belum menyimpan kode batch tersendiri)
     batchId: `BATCH-${timestamp.slice(0, 10).replace(/-/g, "")}`,
     operatorId: m.operator_id || undefined,
+    label: m.label || "",
     spectral: Object.fromEntries(WAVELENGTHS.map((w) => [`nm${w}`, m[`nm${w}`] ?? 0])),
   };
 }
@@ -122,39 +125,46 @@ export async function syncScans(): Promise<ScanRecord[]> {
   return scans;
 }
 
-/**
- * Memicu pemindaian buah lewat POST /api/scan (sensor AS7265x + model SVM di server).
- * Gagal = lempar Error berisi pesan server. Tidak pernah membuat hasil pengganti:
- * arahan keranjang hanya boleh berasal dari spektrum yang benar-benar diukur.
- */
-export async function triggerScan(opts: {
-  operatorId?: string;
-  deviceId: string;
+/** Satu baris antrean conveyor: putusan model, atau GAGAL bila sensor/model gagal. */
+export interface QueueItem {
+  id: number;
   fruitId: string;
-}): Promise<ScanRecord> {
-  const res = await apiFetch<{
-    measurement: any;
-    prediction?: { result: "NORMAL" | "ANOMALI"; confidence: number };
-  }>("api/scan", {
-    method: "POST",
-    body: JSON.stringify({
-      fruit_id: opts.fruitId.trim().toUpperCase(),
-      device_id: opts.deviceId,
-      operator_id: opts.operatorId || "",
-    }),
-    // Firmware bisa retry hingga 3x di sisi server
-    timeoutMs: 20000,
-  });
+  seq: string;
+  timestamp: string;
+  verdict: "NORMAL" | "ANOMALI" | "GAGAL";
+  confidence: number;
+}
 
-  const m = res.data?.measurement;
-  const p = res.data?.prediction;
-  if (!res.ok || !m || !p) {
-    throw new Error(res.error || "Server tidak mengembalikan hasil klasifikasi");
-  }
+/**
+ * Buah terakhir yang lewat conveyor, terbaru di depan. Server memberi ID
+ * CV-YYYYMMDD-NNNN (SIM-... untuk simulator); NNNN = nomor di LCD alat.
+ */
+export async function fetchQueue(limit = 12): Promise<QueueItem[] | null> {
+  const res = await apiFetch<{ measurements: any[] }>(`api/measurements?limit=${limit}`, { timeoutMs: 4000 });
+  if (!res.ok || !Array.isArray(res.data?.measurements)) return null;
+  return res.data.measurements
+    .filter((m) => /^(CV|SIM)-\d{8}-\d{4}$/.test(m.fruit_id))
+    .map((m) => ({
+      id: m.id,
+      fruitId: m.fruit_id,
+      seq: String(Number(m.fruit_id.slice(-4))),
+      timestamp: m.timestamp,
+      verdict: m.prediction === "NORMAL" || m.prediction === "ANOMALI" ? m.prediction : "GAGAL",
+      confidence: Math.round(m.confidence ?? 0),
+    }));
+}
 
-  const scan = toScanRecord({ ...m, prediction: p.result, confidence: p.confidence }, getDevices());
-  writeCache(SCANS_KEY, [...getScans(), scan]);
-  return scan;
+export async function setScanLabel(id: string, label: "" | "normal" | "anomali") {
+  return apiFetch(`api/measurements/${id}/label`, { method: "PATCH", body: JSON.stringify({ label }) });
+}
+
+export async function requestSimulation(count: number) {
+  return apiFetch<{ count: number }>("api/device/simulate", { method: "POST", body: JSON.stringify({ count }) });
+}
+
+export async function fetchDeviceStatus(): Promise<{ connected: boolean; firmware?: string; mode?: string } | null> {
+  const res = await apiFetch<{ device: any }>("api/status", { timeoutMs: 4000 });
+  return res.ok ? res.data?.device ?? null : null;
 }
 
 export const DEVICE_COLORS: Record<string, string> = {

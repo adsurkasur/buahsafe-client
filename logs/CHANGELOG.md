@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased] - 2026-10-25 (conveyor)
+### Changed
+- Halaman Pemindaian menjadi Antrean Conveyor untuk operator di ujung belt.
+
+### Added
+- Pelabelan hasil belah di Riwayat dan filter "Belum dilabel".
+
+### Removed
+- Input ID buah manual dan pemicu scan dari web.
+
 ## [Unreleased] - 2026-10-25
 ### Changed
 - Grafik dan CSV memakai 18 kanal AS7265x sesuai model produksi (SVM-RBF 18 kanal).

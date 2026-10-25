@@ -23,7 +23,7 @@ interface NavItem {
 
 const ALL_ITEMS: NavItem[] = [
   { to: "/", label: "Ringkasan", icon: LayoutDashboard, roles: ["supervisor", "owner"] },
-  { to: "/scan", label: "Pemindaian", icon: ScanLine, roles: ["operator"] },
+  { to: "/scan", label: "Antrean Conveyor", icon: ScanLine, roles: ["operator", "supervisor", "owner"] },
   { to: "/devices", label: "Perangkat", icon: Cpu, roles: ["supervisor", "owner"] },
   { to: "/history", label: "Riwayat Sortasi", icon: ClipboardList, roles: ["operator", "supervisor", "owner"] },
   { to: "/analytics", label: "Analitik", icon: BarChart3, roles: ["supervisor", "owner"] },
