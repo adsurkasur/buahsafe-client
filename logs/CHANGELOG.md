@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased] - 2026-10-25
+### Changed
+- Grafik dan CSV memakai 18 kanal AS7265x sesuai model produksi (SVM-RBF 18 kanal).
+- Istilah "Reflektansi" diganti "Intensitas transmisi".
+
+### Removed
+- Dependensi `@tanstack/react-start` dan `@tanstack/start` yang tidak dipakai (penyebab deploy Vercel diblokir).
+
 ## [Unreleased] - 2026-10-23
 ### Added
 - Spanduk status server offline di semua halaman.

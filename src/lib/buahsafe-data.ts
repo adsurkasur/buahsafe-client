@@ -19,14 +19,9 @@ export interface Device {
   installDate: string;
 }
 
-export interface SpectralChannels {
-  nm610: number;
-  nm680: number;
-  nm730: number;
-  nm760: number;
-  nm810: number;
-  nm860: number;
-}
+// 18 kanal AS7265x (nm). Nilai = intensitas cahaya transmisi terkalibrasi sensor.
+export const WAVELENGTHS = [410, 435, 460, 485, 510, 535, 560, 585, 610, 645, 680, 705, 730, 760, 810, 860, 900, 940];
+export type SpectralChannels = Record<string, number>;
 
 export interface ScanRecord {
   id: string;
@@ -41,9 +36,9 @@ export interface ScanRecord {
   spectral?: SpectralChannels;
 }
 
-// v2: kunci baru supaya cache data acak dari versi purwarupa (v1) tidak terbaca lagi
-const DEVICES_KEY = "buahsafe.devices.v2";
-const SCANS_KEY = "buahsafe.scans.v2";
+// v3: cache v1 berisi data acak purwarupa, v2 hanya 6 kanal
+const DEVICES_KEY = "buahsafe.devices.v3";
+const SCANS_KEY = "buahsafe.scans.v3";
 
 function readCache<T>(key: string): T[] {
   if (typeof window === "undefined") return [];
@@ -104,14 +99,7 @@ function toScanRecord(m: any, devices: Device[]): ScanRecord {
     // Batch = hari sortasi (server belum menyimpan kode batch tersendiri)
     batchId: `BATCH-${timestamp.slice(0, 10).replace(/-/g, "")}`,
     operatorId: m.operator_id || undefined,
-    spectral: {
-      nm610: m.nm610 ?? 0,
-      nm680: m.nm680 ?? 0,
-      nm730: m.nm730 ?? 0,
-      nm760: m.nm760 ?? 0,
-      nm810: m.nm810 ?? 0,
-      nm860: m.nm860 ?? 0,
-    },
+    spectral: Object.fromEntries(WAVELENGTHS.map((w) => [`nm${w}`, m[`nm${w}`] ?? 0])),
   };
 }
 

@@ -13,6 +13,7 @@ import {
   syncScans,
   DEVICE_COLORS,
   ScanRecord,
+  WAVELENGTHS,
 } from "@/lib/buahsafe-data";
 import { useAuth } from "@/lib/auth";
 
@@ -91,12 +92,7 @@ function HistoryPage() {
       "Batch_ID",
       "Hasil_Mutu",
       "Keyakinan_Persen",
-      "R610",
-      "R680",
-      "R730",
-      "R760",
-      "R810",
-      "R860",
+      ...WAVELENGTHS.map((w) => `I${w}`),
     ];
     const rows = filtered.map((s) => [
       `"${s.timestamp}"`,
@@ -105,12 +101,7 @@ function HistoryPage() {
       `"${s.batchId}"`,
       `"${s.result}"`,
       s.confidence,
-      s.spectral?.nm610 ?? "",
-      s.spectral?.nm680 ?? "",
-      s.spectral?.nm730 ?? "",
-      s.spectral?.nm760 ?? "",
-      s.spectral?.nm810 ?? "",
-      s.spectral?.nm860 ?? "",
+      ...WAVELENGTHS.map((w) => s.spectral?.[`nm${w}`] ?? ""),
     ]);
     const csvContent =
       "data:text/csv;charset=utf-8," +
@@ -234,7 +225,7 @@ function HistoryPage() {
                 <th className="px-4 py-3 text-left font-medium">ID Buah / Batch</th>
                 <th className="px-4 py-3 text-left font-medium">Hasil Klasifikasi</th>
                 <th className="px-4 py-3 text-left font-medium">Tingkat Keyakinan</th>
-                <th className="px-4 py-3 text-left font-medium">Reflektansi NIR 730 / 810 nm</th>
+                <th className="px-4 py-3 text-left font-medium">Intensitas Transmisi 730 / 810 nm</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">

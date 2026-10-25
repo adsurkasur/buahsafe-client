@@ -230,8 +230,8 @@ function ScanPage() {
 
               <p className="mt-2.5 text-xs opacity-85">
                 {latestScan.result === "NORMAL"
-                  ? "Pola reflektansi spektral NIR sesuai profil buah normal pada model klasifikasi."
-                  : "Reflektansi spektral NIR menyimpang dari profil buah normal (indikasi busuk atau hama di dalam daging buah)."}
+                  ? "Pola intensitas transmisi NIR sesuai profil buah normal pada model klasifikasi."
+                  : "Intensitas transmisi NIR menyimpang dari profil buah normal (indikasi busuk atau hama di dalam daging buah)."}
               </p>
 
               <SpectralMiniChart spectral={latestScan.spectral} result={latestScan.result} />

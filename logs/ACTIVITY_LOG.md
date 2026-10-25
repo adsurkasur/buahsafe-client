@@ -1,5 +1,15 @@
 # Activity Log
 
+### [2026-10-25 21:30] [Claude Code]
+- **Goal**: Klien siap diuji penuh di `buahsafe.vercel.app` dengan model 18 kanal dan istilah fisika yang benar.
+- **Actions**:
+  - Menghapus `@tanstack/react-start` dan `@tanstack/start` (tidak dipakai sejak migrasi ke TanStack Router). Paket react-start 1.167.65 memicu blokir keamanan Vercel (CVE XSS) sehingga dua deploy terakhir gagal dan produksi tertahan di versi 166 hari lalu.
+  - Istilah "Reflektansi/Pantulan" diganti "Intensitas transmisi" (prinsip pengukuran alat: lampu dan sensor berseberangan, BAB 3.1.4.4).
+  - Data spektral kini 18 kanal (`WAVELENGTHS`): grafik menampilkan 18 batang dengan 730/810 nm ditandai, CSV memuat I410–I940; cache lokal naik ke `v3`.
+  - Vercel: proyek ditautkan (`.vercel`, diabaikan Git), `VITE_API_URL=https://buahsafe-api.adsurkasur.my.id` untuk Production/Preview.
+- **Files Modified**: `package.json`, `bun.lock`, `.gitignore`, `src/lib/buahsafe-data.ts`, `src/components/buahsafe/SpectralMiniChart.tsx`, `src/routes/{history,scan}.tsx`, `logs/*`.
+- **Verification**: `tsc --noEmit` bersih; `bun run build` sukses; tidak ada `react-start` di `bun.lock`.
+
 ### [2026-10-23 00:25] [Claude Code]
 - **Goal**: Audit kesiapan produksi klien (keamanan, bahasa, UX) dan uji E2E peramban 4 persona.
 - **Actions**:
