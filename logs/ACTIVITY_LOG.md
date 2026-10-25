@@ -1,5 +1,15 @@
 # Activity Log
 
+### [2026-10-26 01:30] [Claude Code]
+- **Goal**: Rombak total UI/UX: menarik, fungsional, mudah dipakai operator di tablet/HP ujung belt.
+- **Actions**:
+  - Sistem desain baru "agritech bersih": palet dari jambu kristal (hijau daun, kulit jambu, putih daging buah) dan warna krat sortasi (hijau/merah/kuning) sebagai token `pass/reject/hold`; mode gelap (kelas `.dark`, tanpa kedip lewat skrip awal); huruf Plus Jakarta Sans; logo penampang jambu (`BrandMark`).
+  - Struktur menu baru: Operator hanya **Antrean** (kios layar penuh: blok warna penuh bernomor raksasa, daftar buah sebelumnya, bunyi + getar opsional untuk MERAH/sisihkan, layar penuh). Supervisor: Ringkasan hari ini, Riwayat & label. Pemilik: + Analitik (kecocokan model vs hasil belah) dan Pengaturan (tab Pengguna, Petani mitra, Perangkat; dialog konfirmasi menggantikan `confirm()`). Rute lama dialihkan; `devices.tsx`, `NotificationPanel.tsx`, `StatusBadge.tsx` dihapus.
+  - Komponen bersama `ui.tsx` (PageHeader, KpiTile, VerdictChip, DeviceStatus, EmptyState, ThemeToggle, useChartColors) dan shell baru (`Layout.tsx`, `Sidebar.tsx`: sidebar desktop, bilah atas + navigasi bawah di HP, tautan lewati-ke-konten).
+  - Perbaikan dari tinjauan visual dan Web Interface Guidelines: warna grafik dibaca saat runtime (atribut SVG tidak membaca var() CSS sehingga batang tak terlihat), latar sidebar penuh, status alat dimuat paralel, tab Pengaturan muat di HP, `color-scheme`, `touch-action: manipulation`, spellcheck mati di nama pengguna, baris tabel bisa dibuka dengan keyboard.
+- **Files Modified**: `index.html`, `src/styles.css`, `src/components/buahsafe/{ui,Layout,Sidebar,SpectralMiniChart}.tsx`, `src/routes/{antrean,riwayat,analitik,pengaturan,index,login,scan,history,analytics,master-data,devices}.tsx`, `logs/*`.
+- **Verification**: `tsc --noEmit` bersih; `bun run build` sukses; tangkapan layar 3 ukuran (HP 390, tablet 1024, desktop 1440) terang dan gelap ditinjau; uji UI Playwright lokal 16/16 (HP). Uji di buahsafe.vercel.app: `../LAPORAN_UJI_PENUH_2026-10-25.md`.
+
 ### [2026-10-25 23:50] [Claude Code]
 - **Goal**: Perbaikan dari uji conveyor langsung.
 - **Actions**: Panel samping kini mengambil daftar perangkat dari server sendiri (sebelumnya operator melihat "0 / 0 perangkat aktif" karena hanya membaca cache halaman Perangkat).

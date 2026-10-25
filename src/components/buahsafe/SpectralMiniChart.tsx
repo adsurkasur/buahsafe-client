@@ -21,7 +21,7 @@ export function SpectralMiniChart({ spectral, result }: { spectral?: ScanRecord[
           <Activity className="w-3.5 h-3.5 text-primary" />
           Spektrum Intensitas Transmisi {channels.length} Kanal (Visible-NIR)
         </span>
-        <span className="font-mono text-[10px] text-muted-foreground">Sensor AS7265x</span>
+        <span className="text-[11px] text-muted-foreground">Sensor AS7265x</span>
       </div>
       <div
         className="grid gap-0.5 items-end h-20 pt-2"
@@ -29,7 +29,7 @@ export function SpectralMiniChart({ spectral, result }: { spectral?: ScanRecord[
       >
         {channels.map((c, i) => {
           const heightPct = Math.min(100, Math.max(8, (c.val / maxVal) * 100));
-          const barColor = isAnomali && c.isKey ? "bg-rose-500 hover:bg-rose-600" : "bg-primary/80 hover:bg-primary";
+          const barColor = isAnomali && c.isKey ? "bg-reject" : "bg-leaf/80";
           // 18 label tidak muat di layar sempit: tampilkan kanal kunci dan tiap kanal ketiga
           const showLabel = c.isKey || i % 3 === 0;
           return (
@@ -39,7 +39,7 @@ export function SpectralMiniChart({ spectral, result }: { spectral?: ScanRecord[
                 style={{ height: `${heightPct}%` }}
                 title={`${c.wl} nm: ${c.val.toFixed(3)}${c.isKey ? " (kanal kunci NIR)" : ""}`}
               />
-              <span className={`text-[8px] font-mono leading-none ${c.isKey ? "font-bold text-foreground" : "text-muted-foreground"}`}>
+              <span className={`text-[9px] tabular leading-none ${c.isKey ? "font-bold text-foreground" : "text-muted-foreground"}`}>
                 {showLabel ? c.wl : " "}
               </span>
             </div>
@@ -47,7 +47,7 @@ export function SpectralMiniChart({ spectral, result }: { spectral?: ScanRecord[
         })}
       </div>
       {isAnomali && (
-        <div className="mt-2 text-[10px] text-rose-600 font-medium">
+        <div className="mt-2 text-[10px] text-reject font-medium">
           * Batang merah = kanal kunci 730 & 810 nm. Bandingkan dengan pola buah normal sebelum mengambil keputusan manual.
         </div>
       )}

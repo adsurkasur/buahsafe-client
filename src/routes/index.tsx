@@ -1,371 +1,151 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  ScanLine,
-  ShieldCheck,
-  AlertTriangle,
-  Wifi,
-  ArrowUpRight,
-  ArrowDownRight,
-} from "lucide-react";
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-} from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { format, formatDistanceToNow, startOfDay, subDays } from "date-fns";
+import { ScanLine } from "lucide-react";
 import { PageLayout } from "@/components/buahsafe/Layout";
-import { ResultBadge, DeviceStatusPill } from "@/components/buahsafe/StatusBadge";
-import {
-  getDevices,
-  getScans,
-  syncDevices,
-  syncScans,
-  DEVICE_COLORS,
-  ScanRecord,
-  Device,
-} from "@/lib/buahsafe-data";
+import { DeviceStatus, EmptyState, KpiTile, VerdictChip, useChartColors } from "@/components/buahsafe/ui";
+import { fetchDeviceStatus, fetchQueue, getDevices, getScans, QueueItem, ScanRecord, syncDevices, syncScans } from "@/lib/buahsafe-data";
 
-export const Route = createFileRoute("/")({
-  component: Dashboard,
-});
+export const Route = createFileRoute("/")({ component: Ringkasan });
 
-function useCountUp(target: number, duration = 800) {
-  const [val, setVal] = useState(0);
-  useEffect(() => {
-    let raf: number;
-    const start = performance.now();
-    const from = 0;
-    const tick = (now: number) => {
-      const t = Math.min(1, (now - start) / duration);
-      const eased = 1 - Math.pow(1 - t, 3);
-      setVal(Math.round(from + (target - from) * eased));
-      if (t < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [target, duration]);
-  return val;
-}
+type DeviceInfo = {
+  connected: boolean;
+  firmware?: string;
+  seconds_since_seen?: number | null;
+  last_trigger_ms?: number | null;
+  last_measure_ms?: number | null;
+  rssi?: string | null;
+};
 
-function StatCard({
-  index,
-  title,
-  value,
-  displayValue,
-  subtitle,
-  suffix,
-  icon: Icon,
-  accent,
-  trend,
-}: {
-  index: number;
-  title: string;
-  value: number;
-  displayValue?: string;
-  subtitle?: string;
-  suffix?: string;
-  icon: React.ElementType;
-  accent: "emerald" | "rose" | "amber" | "slate";
-  trend?: { dir: "up" | "down"; pct: number };
-}) {
-  const v = useCountUp(value);
-  const accentMap = {
-    emerald: "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400",
-    rose: "bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400",
-    amber: "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400",
-    slate: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
-  };
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.1, duration: 0.4, ease: "easeOut" }}
-      className="rounded-xl border border-border bg-card p-5 shadow-sm"
-    >
-      <div className="flex items-start justify-between">
-        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{title}</div>
-        <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${accentMap[accent]}`}>
-          <Icon className="w-4 h-4" />
-        </div>
-      </div>
-      <div className="mt-4 flex items-baseline gap-2">
-        <div className="text-3xl font-semibold tracking-tight">
-          {displayValue ?? `${v}${suffix ?? ""}`}
-        </div>
-        {trend && (
-          <div
-            className={`flex items-center text-xs font-medium ${
-              trend.dir === "up" ? "text-emerald-600" : "text-rose-600"
-            }`}
-          >
-            {trend.dir === "up" ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-            {trend.pct.toFixed(1)}%
-          </div>
-        )}
-      </div>
-      <div className="mt-1 text-xs text-muted-foreground">{subtitle ?? "dibandingkan hari kemarin"}</div>
-    </motion.div>
-  );
-}
+const pct = (n: number, d: number) => (d ? `${Math.round((n / d) * 100)}%` : "—");
 
-function Dashboard() {
-  const [scans, setScans] = useState<ScanRecord[]>([]);
-  const [devices, setDevices] = useState<Device[]>([]);
+function Ringkasan() {
+  const [scans, setScans] = useState<ScanRecord[]>(getScans());
+  const [recent, setRecent] = useState<QueueItem[]>([]);
+  const [device, setDevice] = useState<DeviceInfo | null>(null);
+  const deviceName = getDevices()[0]?.name;
+  const c = useChartColors();
 
   useEffect(() => {
-    setScans(getScans());
-    setDevices(getDevices());
-
-    // Sinkronisasi berkala dari server backend
-    const sync = async () => {
-      await syncDevices();
-      setScans(await syncScans());
-      setDevices(getDevices());
+    // Paralel: status alat tidak boleh menunggu riwayat yang lebih berat
+    const sync = () => {
+      fetchDeviceStatus().then((d) => setDevice(d as DeviceInfo | null));
+      fetchQueue(200).then((q) => q && setRecent(q));
+      syncDevices().then(syncScans).then(setScans);
     };
     sync();
-    const interval = setInterval(sync, 10_000);
-    return () => clearInterval(interval);
+    const i = setInterval(sync, 10_000);
+    return () => clearInterval(i);
   }, []);
 
-  // Metrik hari ini
   const today0 = startOfDay(new Date()).getTime();
-  const yest0 = startOfDay(subDays(new Date(), 1)).getTime();
+  const isToday = (ts: string) => new Date(ts).getTime() >= today0;
+  const todayScans = scans.filter((s) => isToday(s.timestamp));
+  const normal = todayScans.filter((s) => s.result === "NORMAL").length;
+  const anomali = todayScans.length - normal;
+  const gagal = recent.filter((r) => r.verdict === "GAGAL" && isToday(r.timestamp)).length;
+  const total = todayScans.length + gagal;
 
-  const todayScans = scans.filter((s) => new Date(s.timestamp).getTime() >= today0);
-  const yestScans = scans.filter((s) => {
-    const t = new Date(s.timestamp).getTime();
-    return t >= yest0 && t < today0;
-  });
-
-  const totalToday = todayScans.length;
-  const normalToday = todayScans.filter((s) => s.result === "NORMAL").length;
-  const passToday = totalToday ? (normalToday / totalToday) * 100 : 0;
-  const anomToday = todayScans.length - normalToday;
-
-  const normalYest = yestScans.filter((s) => s.result === "NORMAL").length;
-  const passYest = yestScans.length ? (normalYest / yestScans.length) * 100 : 0;
-  const anomYest = yestScans.length - normalYest;
-
-  const passTrend = yestScans.length ? passToday - passYest : 0;
-  const anomTrend = anomYest ? ((anomToday - anomYest) / anomYest) * 100 : 0;
-
-  const activeDevices = devices.filter((d) => d.status !== "offline").length;
-
-  // Tren 7 hari terakhir
-  const trend7 = Array.from({ length: 7 }).map((_, i) => {
+  const week = Array.from({ length: 7 }, (_, i) => {
     const day = startOfDay(subDays(new Date(), 6 - i));
-    const next = day.getTime() + 86400000;
-    const dayScans = scans.filter((s) => {
+    const next = day.getTime() + 86_400_000;
+    const ds = scans.filter((s) => {
       const t = new Date(s.timestamp).getTime();
       return t >= day.getTime() && t < next;
     });
-    const n = dayScans.filter((s) => s.result === "NORMAL").length;
-    const a = dayScans.length - n;
-    return {
-      day: format(day, "d MMM"),
-      NORMAL: n,
-      ANOMALI: a,
-      passRate: dayScans.length ? Math.round((n / dayScans.length) * 100) : 0,
-    };
+    const n = ds.filter((s) => s.result === "NORMAL").length;
+    return { hari: format(day, "EEE d"), Normal: n, Anomali: ds.length - n };
   });
-
-  const recent = [...scans].sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 8);
-
-  const totalScansAll = scans.length;
-  const normalScansAll = scans.filter((s) => s.result === "NORMAL").length;
-  const cumulativePassRate = totalScansAll ? Math.round((normalScansAll / totalScansAll) * 100) : 0;
+  const weekHasData = week.some((d) => d.Normal + d.Anomali > 0);
 
   return (
     <PageLayout
-      title="Ringkasan Operasional"
-      subtitle="Pantauan mutu spektroskopi dan performa sortasi waktu nyata"
+      title="Ringkasan hari ini"
+      subtitle={format(new Date(), "EEEE, d MMMM yyyy")}
       roles={["supervisor", "owner"]}
+      actions={
+        <>
+          <DeviceStatus connected={device?.connected} simulator={!!device?.firmware?.startsWith("sim")} />
+          <Link to="/antrean" className="h-11 px-4 rounded-xl bg-primary text-primary-foreground text-sm font-semibold inline-flex items-center gap-2">
+            <ScanLine className="w-5 h-5" /> Buka antrean
+          </Link>
+        </>
+      }
     >
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          index={0}
-          title="Total Pindaian Hari Ini"
-          value={totalToday}
-          subtitle={totalToday > 0 ? "dibandingkan hari kemarin" : "Belum ada pindaian sesi hari ini"}
-          icon={ScanLine}
-          accent="slate"
-        />
-        <StatCard
-          index={1}
-          title="Tingkat Kelolosan Mutu"
-          value={Math.round(passToday)}
-          displayValue={totalToday > 0 ? `${Math.round(passToday)}%` : totalScansAll > 0 ? `${cumulativePassRate}%*` : "—"}
-          subtitle={
-            totalToday > 0
-              ? "dibandingkan hari kemarin"
-              : totalScansAll > 0
-                ? "*Belum ada pindaian hari ini; angka = rata-rata seluruh riwayat"
-                : "Belum ada data sortasi"
-          }
-          icon={ShieldCheck}
-          accent="emerald"
-          trend={totalToday > 0 && yestScans.length ? { dir: passTrend >= 0 ? "up" : "down", pct: Math.abs(passTrend) } : undefined}
-        />
-        <StatCard
-          index={2}
-          title="Anomali Terdeteksi"
-          value={anomToday}
-          subtitle={totalToday > 0 ? "dibandingkan hari kemarin" : "Belum ada temuan hari ini"}
-          icon={AlertTriangle}
-          accent="rose"
-          trend={totalToday > 0 && anomYest ? { dir: anomTrend <= 0 ? "up" : "down", pct: Math.abs(anomTrend) } : undefined}
-        />
-        <StatCard
-          index={3}
-          title="Armada Aktif"
-          value={activeDevices}
-          suffix={` / ${devices.length}`}
-          subtitle={`${devices.length - activeDevices} perangkat nonaktif`}
-          icon={Wifi}
-          accent={activeDevices === devices.length ? "emerald" : "amber"}
-        />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <KpiTile label="Buah dipindai" value={total ? String(total) : "—"} hint={total ? "sejak pukul 00.00" : "Belum ada buah hari ini"} />
+        <KpiTile label="Lolos mutu" value={pct(normal, todayScans.length)} hint={todayScans.length ? `${normal} dari ${todayScans.length} buah dinilai` : "Menunggu buah pertama"} tone="pass" />
+        <KpiTile label="Anomali" value={todayScans.length ? String(anomali) : "—"} hint="ke keranjang merah" tone="reject" />
+        <KpiTile label="Disisihkan" value={total ? String(gagal) : "—"} hint="sensor atau model gagal" tone="hold" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 mt-6">
-        {/* Feed pindaian langsung */}
-        <div className="lg:col-span-3 rounded-xl border border-border bg-card shadow-sm">
-          <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="relative flex w-2 h-2">
-                <span className="absolute inset-0 rounded-full bg-emerald-500 animate-ping opacity-75" />
-                <span className="relative w-2 h-2 rounded-full bg-emerald-500" />
-              </span>
-              <h3 className="font-semibold text-sm">Aktivitas Pemindaian Terbaru</h3>
-            </div>
-            <Link to="/history" className="text-xs text-primary hover:underline font-medium">
-              Lihat semua riwayat →
-            </Link>
+      <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <section className="rounded-2xl bg-card border border-border">
+          <div className="flex items-center justify-between px-5 pt-5 pb-3">
+            <h2 className="font-bold">Buah terakhir</h2>
+            <Link to="/riwayat" className="text-sm font-semibold text-primary hover:underline">Lihat riwayat</Link>
           </div>
-          <div className="divide-y divide-border">
-            {recent.length === 0 && (
-              <div className="px-5 py-12 text-center text-sm text-muted-foreground">
-                Belum ada pindaian tercatat. Hasil dari meja sortasi akan muncul di sini.
-              </div>
-            )}
-            <AnimatePresence initial={false}>
-              {recent.map((s) => (
-                <motion.div
-                  key={s.id}
-                  layout
-                  initial={{ opacity: 0, y: -6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="px-5 py-3 flex items-center gap-4 hover:bg-accent/40 transition-colors"
-                >
-                  <span className={`px-2 py-0.5 rounded-md text-[11px] font-mono border ${DEVICE_COLORS[s.deviceId] || "bg-muted text-muted-foreground"}`}>
-                    {s.deviceId}
+          {recent.length ? (
+            <ol className="px-3 pb-3">
+              {recent.slice(0, 8).map((r) => (
+                <li key={r.id} className="flex items-center gap-3 px-2 py-2.5 border-t border-border first:border-t-0">
+                  <span className="w-14 text-lg font-extrabold tabular">#{r.seq}</span>
+                  <span className="flex-1 text-sm text-muted-foreground">
+                    {formatDistanceToNow(new Date(r.timestamp), { addSuffix: true })}
                   </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate font-mono">{s.fruitId || s.batchId}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {formatDistanceToNow(new Date(s.timestamp), { addSuffix: true })} · {s.deviceName}
-                    </div>
-                  </div>
-                  <div className="hidden sm:flex items-center gap-2 w-32">
-                    <div className="flex-1 h-1.5 rounded-full bg-secondary overflow-hidden">
-                      <div
-                        className={`h-full ${s.result === "NORMAL" ? "bg-emerald-500" : "bg-rose-500"}`}
-                        style={{ width: `${s.confidence}%` }}
-                      />
-                    </div>
-                    <div className="text-xs text-muted-foreground tabular-nums font-mono">{s.confidence}%</div>
-                  </div>
-                  <ResultBadge result={s.result} />
-                </motion.div>
+                  <VerdictChip verdict={r.verdict} />
+                </li>
               ))}
-            </AnimatePresence>
-          </div>
-        </div>
+            </ol>
+          ) : (
+            <div className="p-5 pt-0"><EmptyState title="Belum ada buah">Hasil conveyor muncul di sini setelah belt berjalan.</EmptyState></div>
+          )}
+        </section>
 
-        {/* Status Armada Meja Sortasi */}
-        <div className="lg:col-span-2 rounded-xl border border-border bg-card shadow-sm">
-          <div className="px-5 py-4 border-b border-border">
-            <h3 className="font-semibold text-sm">Status Armada Pemindai</h3>
-          </div>
-          <div className="p-3 space-y-2">
-            {devices.map((d) => {
-              const todayCount = todayScans.filter((s) => s.deviceId === d.id).length;
-              return (
-                <Link
-                  key={d.id}
-                  to="/devices"
-                  className="block p-3 rounded-lg border border-border hover:bg-accent transition-colors"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className={`px-2 py-0.5 rounded-md text-[11px] font-mono border ${DEVICE_COLORS[d.id] || "bg-muted text-muted-foreground"}`}>
-                      {d.id}
-                    </span>
-                    <DeviceStatusPill status={d.status} />
-                  </div>
-                  <div className="mt-2 font-medium text-sm">{d.name}</div>
-                  <div className="text-xs text-muted-foreground">{d.location}</div>
-                  <div className="mt-2 flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">
-                      {formatDistanceToNow(new Date(d.lastSeen), { addSuffix: true })}
-                    </span>
-                    <span className="font-medium tabular-nums">{todayCount} pindaian hari ini</span>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
+        <section className="rounded-2xl bg-card border border-border p-5">
+          <h2 className="font-bold">Kondisi alat</h2>
+          <dl className="mt-4 space-y-3 text-sm">
+            {[
+              ["Nama", deviceName ?? "BSF-001"],
+              ["Detak terakhir", device?.seconds_since_seen != null ? `${Math.round(device.seconds_since_seen)} detik lalu` : "belum ada"],
+              ["Firmware", device?.firmware ?? "—"],
+              ["Sinyal PIR aktif", device?.last_trigger_ms != null ? `${device.last_trigger_ms} ms` : "—"],
+              ["Lama pengukuran", device?.last_measure_ms != null ? `${device.last_measure_ms} ms` : "—"],
+            ].map(([k, v]) => (
+              <div key={k} className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">{k}</dt>
+                <dd className="font-semibold tabular text-right">{v}</dd>
+              </div>
+            ))}
+          </dl>
+          <p className="mt-4 text-xs text-muted-foreground leading-relaxed">
+            Lama sinyal PIR dan lama pengukuran dipakai untuk mengatur jeda lampu agar pengukuran selesai sebelum buah
+            keluar dari depan sensor.
+          </p>
+        </section>
       </div>
 
-      {/* Grafik Tren 7 Hari */}
-      <div className="mt-6 rounded-xl border border-border bg-card shadow-sm">
-        <div className="px-5 py-4 border-b border-border">
-          <h3 className="font-semibold text-sm">Aktivitas Pemindaian — 7 Hari Terakhir</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">Distribusi perbandingan buah NORMAL vs ANOMALI</p>
-        </div>
-        <div className="p-5 h-[300px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={trend7} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <defs>
-                <linearGradient id="gNorm" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#10B981" stopOpacity={0.35} />
-                  <stop offset="100%" stopColor="#10B981" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="gAnom" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#F43F5E" stopOpacity={0.35} />
-                  <stop offset="100%" stopColor="#F43F5E" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
-              <XAxis dataKey="day" stroke="#64748B" fontSize={12} tickLine={false} axisLine={false} />
-              <YAxis stroke="#64748B" fontSize={12} tickLine={false} axisLine={false} />
-              <Tooltip
-                content={({ active, payload, label }) => {
-                  if (!active || !payload?.length) return null;
-                  const d = payload[0].payload;
-                  return (
-                    <div className="rounded-lg border border-border bg-card shadow-md p-3 text-xs">
-                      <div className="font-medium mb-1">{label}</div>
-                      <div className="text-emerald-600 font-semibold">Normal: {d.NORMAL}</div>
-                      <div className="text-rose-600 font-semibold">Anomali: {d.ANOMALI}</div>
-                      <div className="text-muted-foreground mt-1 pt-1 border-t border-border">
-                        Tingkat Kelolosan: {d.passRate}%
-                      </div>
-                    </div>
-                  );
-                }}
-              />
-              <Area type="monotone" dataKey="NORMAL" stroke="#10B981" strokeWidth={2} fill="url(#gNorm)" />
-              <Area type="monotone" dataKey="ANOMALI" stroke="#F43F5E" strokeWidth={2} fill="url(#gAnom)" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+      <section className="mt-6 rounded-2xl bg-card border border-border p-5">
+        <h2 className="font-bold">Tujuh hari terakhir</h2>
+        <p className="text-sm text-muted-foreground">Jumlah buah per hari menurut putusan model</p>
+        {weekHasData ? (
+          <div className="h-64 mt-4">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={week} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
+                <CartesianGrid vertical={false} stroke={c.grid} />
+                <XAxis dataKey="hari" tickLine={false} axisLine={false} fontSize={12} stroke={c.text} />
+                <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={12} stroke={c.text} />
+                <Tooltip cursor={{ fill: c.accent }} contentStyle={{ borderRadius: 12, border: `1px solid ${c.grid}`, background: c.card }} />
+                <Bar dataKey="Normal" stackId="a" fill={c.pass} radius={[0, 0, 4, 4]} />
+                <Bar dataKey="Anomali" stackId="a" fill={c.reject} radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className="mt-4"><EmptyState title="Belum ada data minggu ini" /></div>
+        )}
+      </section>
     </PageLayout>
   );
 }

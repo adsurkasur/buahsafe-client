@@ -1,5 +1,13 @@
 # Decision Log (Architecture Decision Records)
 
+### [DEC-004] Struktur Menu Berbasis Peran dan Mode Kios Operator
+- **Date**: 2026-10-26
+- **Status**: Accepted
+- **Context**: Operator berdiri di ujung belt memakai tablet/HP dan harus membaca arahan keranjang dari jarak 1-2 m; alat hanya satu sehingga halaman Perangkat dan panel notifikasi tidak bernilai; analitik lama memuat klaim yang tidak dapat dibuktikan.
+- **Decision**: Lima halaman inti per peran (Antrean kios; Ringkasan; Riwayat & label; Analitik; Pengaturan bertab). Antrean tanpa navigasi dengan blok warna penuh. Analitik menampilkan kecocokan putusan model dengan hasil belah sebagai perkiraan akurasi lapangan. Rute lama dialihkan agar tautan tersimpan tetap berfungsi.
+- **Alternatives**: Poles tampilan lama (ditolak pengguna: minta rombak total); halaman Perangkat terpisah untuk armada (ditunda sampai alat lebih dari satu).
+- **Consequences**: Operator tidak melihat Riwayat; pelabelan menjadi tugas supervisor/pemilik. Selector uji Playwright berubah.
+
 ### [DEC-003] Server sebagai Satu-satunya Sumber Putusan dan Angka (menggantikan sebagian DEC-001)
 - **Date**: 2026-10-23
 - **Status**: Accepted

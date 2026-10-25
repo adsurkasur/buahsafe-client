@@ -1,18 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import {
-  LayoutDashboard,
-  Cpu,
-  ClipboardList,
-  Leaf,
-  Activity,
-  ScanLine,
-  BarChart3,
-  Database,
-  LogOut,
-} from "lucide-react";
-import { getDevices, syncDevices } from "@/lib/buahsafe-data";
-import { useEffect, useState } from "react";
-import { useAuth, Role, ROLE_LABELS, ROLE_COLORS } from "@/lib/auth";
+import { LayoutDashboard, ClipboardList, ScanLine, BarChart3, Settings, LogOut } from "lucide-react";
+import { useAuth, Role, ROLE_LABELS } from "@/lib/auth";
+import { BrandMark, ThemeToggle } from "./ui";
 
 interface NavItem {
   to: string;
@@ -21,152 +10,121 @@ interface NavItem {
   roles: Role[];
 }
 
-const ALL_ITEMS: NavItem[] = [
+export const NAV_ITEMS: NavItem[] = [
+  { to: "/antrean", label: "Antrean", icon: ScanLine, roles: ["operator", "supervisor", "owner"] },
   { to: "/", label: "Ringkasan", icon: LayoutDashboard, roles: ["supervisor", "owner"] },
-  { to: "/scan", label: "Antrean Conveyor", icon: ScanLine, roles: ["operator", "supervisor", "owner"] },
-  { to: "/devices", label: "Perangkat", icon: Cpu, roles: ["supervisor", "owner"] },
-  { to: "/history", label: "Riwayat Sortasi", icon: ClipboardList, roles: ["operator", "supervisor", "owner"] },
-  { to: "/analytics", label: "Analitik", icon: BarChart3, roles: ["supervisor", "owner"] },
-  { to: "/master-data", label: "Data Master", icon: Database, roles: ["owner"] },
+  { to: "/riwayat", label: "Riwayat & label", icon: ClipboardList, roles: ["supervisor", "owner"] },
+  { to: "/analitik", label: "Analitik", icon: BarChart3, roles: ["owner"] },
+  { to: "/pengaturan", label: "Pengaturan", icon: Settings, roles: ["owner"] },
 ];
 
-function useVisibleItems() {
+function useNav() {
   const { user } = useAuth();
-  if (!user) return [];
-  return ALL_ITEMS.filter((i) => i.roles.includes(user.role));
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  const items = user ? NAV_ITEMS.filter((i) => i.roles.includes(user.role)) : [];
+  const isActive = (to: string) => (to === "/" ? path === "/" : path.startsWith(to));
+  return { items, isActive };
+}
+
+function initials(name: string) {
+  return name.split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();
 }
 
 export function AppSidebar() {
-  const path = useRouterState({ select: (s) => s.location.pathname });
-  const [counts, setCounts] = useState({ online: 0, total: 0 });
+  const { items, isActive } = useNav();
   const { user, logout } = useAuth();
-  const items = useVisibleItems();
-
-  useEffect(() => {
-    const show = (d: ReturnType<typeof getDevices>) =>
-      setCounts({
-        online: d.filter((x) => x.status === "online" || x.status === "idle").length,
-        total: d.length,
-      });
-    // Ambil dari server sendiri: operator tidak pernah membuka halaman Perangkat yang mengisi cache
-    const update = () => syncDevices().then(show);
-    show(getDevices());
-    update();
-    const i = setInterval(update, 15000);
-    return () => clearInterval(i);
-  }, []);
-
   return (
-    <aside className="hidden lg:flex flex-col w-64 border-r border-border bg-sidebar h-screen sticky top-0">
-      <div className="px-6 py-5 flex items-center gap-2 border-b border-border">
-        <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
-          <Leaf className="w-5 h-5 text-primary" />
-        </div>
+    // Kolom luar memberi latar penuh setinggi halaman; isi tetap menempel saat digulir
+    <div className="hidden lg:block w-64 shrink-0 border-r border-sidebar-border bg-sidebar">
+    <aside className="flex flex-col sticky top-0 h-dvh">
+      <Link to="/" className="flex items-center gap-3 px-6 h-20">
+        <BrandMark />
         <div>
-          <div className="font-semibold text-[15px] tracking-tight">BuahSafe</div>
-          <div className="text-[11px] text-muted-foreground -mt-0.5">Sistem Inspeksi Mutu</div>
+          <div className="text-lg font-extrabold tracking-tight leading-none">BuahSafe</div>
+          <div className="text-xs text-muted-foreground mt-1">Sortasi jambu kristal</div>
         </div>
-      </div>
-
-      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+      </Link>
+      <nav className="flex-1 px-3 py-2 space-y-1" aria-label="Menu utama">
         {items.map((item) => {
-          const active = item.to === "/" ? path === "/" : path.startsWith(item.to);
+          const active = isActive(item.to);
           return (
             <Link
               key={item.to}
               to={item.to}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
-                active
-                  ? "bg-primary/10 text-primary font-medium"
-                  : "text-foreground/70 hover:bg-accent hover:text-foreground"
+              aria-current={active ? "page" : undefined}
+              className={`flex items-center gap-3 h-11 px-3 rounded-xl text-[15px] font-semibold transition-colors ${
+                active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground"
               }`}
             >
-              <item.icon className="w-4 h-4" />
-              <span className="flex-1">{item.label}</span>
-              {item.to === "/devices" && (
-                <span className="text-[11px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  {counts.online}
-                </span>
-              )}
+              <item.icon className="w-5 h-5" />
+              {item.label}
             </Link>
           );
         })}
       </nav>
-
-      <div className="p-4 border-t border-border space-y-3">
-        <div className="rounded-lg border border-border p-3 bg-card">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Activity className="w-3.5 h-3.5 text-primary" />
-            Status Armada
-          </div>
-          <div className="mt-1.5 text-sm font-semibold">
-            {counts.online} / {counts.total} perangkat aktif
-          </div>
-          <div className="mt-2 h-1 rounded-full bg-secondary overflow-hidden">
-            <div
-              className="h-full bg-primary transition-all"
-              style={{ width: `${(counts.online / Math.max(counts.total, 1)) * 100}%` }}
-            />
-          </div>
-        </div>
-
-        {user && (
-          <div className="rounded-lg border border-border p-3 bg-card">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-semibold">
-                {user.name.split(" ").map((s) => s[0]).slice(0, 2).join("")}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium truncate">{user.name}</div>
-                <span className={`inline-block mt-0.5 text-[10px] px-1.5 py-0.5 rounded border ${ROLE_COLORS[user.role]}`}>
-                  {ROLE_LABELS[user.role]}
-                </span>
-              </div>
+      {user && (
+        <div className="m-3 rounded-2xl bg-secondary p-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-leaf text-primary-foreground grid place-items-center text-sm font-bold">
+              {initials(user.name)}
             </div>
-            <button
-              onClick={logout}
-              className="mt-2.5 w-full h-8 rounded-md border border-border hover:bg-accent flex items-center justify-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>Keluar / Ganti Akun</span>
-            </button>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold truncate">{user.name}</div>
+              <div className="text-xs text-muted-foreground">{ROLE_LABELS[user.role]}</div>
+            </div>
+            <ThemeToggle />
           </div>
-        )}
-      </div>
+          <button
+            onClick={logout}
+            className="mt-3 w-full h-10 rounded-xl border border-border bg-card hover:bg-accent inline-flex items-center justify-center gap-2 text-sm font-semibold"
+          >
+            <LogOut className="w-4 h-4" /> Keluar
+          </button>
+        </div>
+      )}
     </aside>
+    </div>
+  );
+}
+
+export function MobileTopBar() {
+  const { user, logout } = useAuth();
+  return (
+    <header className="lg:hidden sticky top-0 z-30 flex items-center gap-3 h-16 px-4 bg-background/90 backdrop-blur border-b border-border">
+      <BrandMark className="w-8 h-8" />
+      <div className="flex-1 min-w-0">
+        <div className="font-extrabold leading-none">BuahSafe</div>
+        {user && <div className="text-xs text-muted-foreground truncate mt-0.5">{user.name}, {ROLE_LABELS[user.role]}</div>}
+      </div>
+      <ThemeToggle />
+      <button onClick={logout} className="w-11 h-11 rounded-xl hover:bg-accent grid place-items-center" aria-label="Keluar">
+        <LogOut className="w-5 h-5" />
+      </button>
+    </header>
   );
 }
 
 export function MobileNav() {
-  const path = useRouterState({ select: (s) => s.location.pathname });
-  const { logout } = useAuth();
-  const items = useVisibleItems().slice(0, 4);
-  if (items.length === 0) return null;
+  const { items, isActive } = useNav();
+  if (items.length < 2) return null;
   return (
-    <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-card border-t border-border flex items-center">
+    <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-card border-t border-border flex pb-[env(safe-area-inset-bottom)]" aria-label="Menu utama">
       {items.map((item) => {
-        const active = item.to === "/" ? path === "/" : path.startsWith(item.to);
+        const active = isActive(item.to);
         return (
           <Link
             key={item.to}
             to={item.to}
-            className={`flex-1 flex flex-col items-center gap-1 py-2 text-[11px] ${
+            aria-current={active ? "page" : undefined}
+            className={`flex-1 min-h-14 flex flex-col items-center justify-center gap-1 text-[11px] font-semibold ${
               active ? "text-primary" : "text-muted-foreground"
             }`}
           >
-            <item.icon className="w-4 h-4" />
-            <span className="truncate">{item.label}</span>
+            <item.icon className="w-5 h-5" />
+            <span className="truncate max-w-full px-1">{item.label}</span>
           </Link>
         );
       })}
-      <button
-        onClick={logout}
-        className="flex-1 flex flex-col items-center gap-1 py-2 text-[11px] text-muted-foreground hover:text-foreground"
-        title="Keluar"
-      >
-        <LogOut className="w-4 h-4" />
-        <span>Keluar</span>
-      </button>
     </nav>
   );
 }

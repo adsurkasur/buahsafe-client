@@ -5,7 +5,16 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  /* Warna sortasi: dipakai di antrean, lencana, grafik */
+  --color-pass: var(--pass);
+  --color-pass-ink: var(--pass-ink);
+  --color-reject: var(--reject);
+  --color-reject-ink: var(--reject-ink);
+  --color-hold: var(--hold);
+  --color-hold-ink: var(--hold-ink);
+  --color-jambu: var(--jambu);
+  --color-leaf: var(--leaf);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -40,36 +49,80 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
+/* Palet diambil dari jambu kristal dan rumah sortir:
+   daun (utama), kulit jambu (aksen lembut), daging buah (latar), krat hijau/merah, tanda kuning "sisihkan". */
 :root {
-  --radius: 0.75rem;
-  /* BuahSafe palette mapped to oklch */
-  --background: oklch(0.984 0.004 247);   /* #F8FAFC */
-  --foreground: oklch(0.196 0.038 263);   /* #0F172A */
-  --card: oklch(1 0 0);                   /* #FFFFFF */
-  --card-foreground: oklch(0.196 0.038 263);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.196 0.038 263);
-  --primary: oklch(0.696 0.155 162);      /* #10B981 emerald */
-  --primary-foreground: oklch(0.99 0.01 160);
-  --secondary: oklch(0.968 0.007 248);
-  --secondary-foreground: oklch(0.196 0.038 263);
-  --muted: oklch(0.968 0.007 248);
-  --muted-foreground: oklch(0.524 0.033 257); /* #64748B */
-  --accent: oklch(0.968 0.007 248);
-  --accent-foreground: oklch(0.196 0.038 263);
-  --destructive: oklch(0.645 0.222 18);   /* #F43F5E rose */
-  --destructive-foreground: oklch(0.99 0.01 0);
-  --border: oklch(0.917 0.012 255);       /* #E2E8F0 */
-  --input: oklch(0.917 0.012 255);
-  --ring: oklch(0.696 0.155 162);
-  --sidebar: oklch(1 0 0);
-  --sidebar-foreground: oklch(0.196 0.038 263);
-  --sidebar-primary: oklch(0.696 0.155 162);
-  --sidebar-primary-foreground: oklch(0.99 0.01 160);
-  --sidebar-accent: oklch(0.968 0.007 248);
-  --sidebar-accent-foreground: oklch(0.196 0.038 263);
-  --sidebar-border: oklch(0.917 0.012 255);
-  --sidebar-ring: oklch(0.696 0.155 162);
+  color-scheme: light;
+  --radius: 0.875rem;
+  --background: #f5f8f2;
+  --foreground: #183323;
+  --card: #ffffff;
+  --card-foreground: #183323;
+  --popover: #ffffff;
+  --popover-foreground: #183323;
+  --primary: #1e6b3c;
+  --primary-foreground: #f5f8f2;
+  --secondary: #eaf0e4;
+  --secondary-foreground: #183323;
+  --muted: #eaf0e4;
+  --muted-foreground: #586c5e;
+  --accent: #e2eed6;
+  --accent-foreground: #183323;
+  --destructive: #c2362b;
+  --destructive-foreground: #ffffff;
+  --border: #d6e0cf;
+  --input: #cbd8c3;
+  --ring: #1e6b3c;
+  --leaf: #1e6b3c;
+  --jambu: #c9e39a;
+  --pass: #1f8a4c;
+  --pass-ink: #ffffff;
+  --reject: #c2362b;
+  --reject-ink: #ffffff;
+  --hold: #e0a11b;
+  --hold-ink: #2a1c00;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #183323;
+  --sidebar-primary: #1e6b3c;
+  --sidebar-primary-foreground: #f5f8f2;
+  --sidebar-accent: #eaf0e4;
+  --sidebar-accent-foreground: #183323;
+  --sidebar-border: #d6e0cf;
+  --sidebar-ring: #1e6b3c;
+}
+
+.dark {
+  color-scheme: dark;
+  --background: #11201a;
+  --foreground: #e6efe2;
+  --card: #172a22;
+  --card-foreground: #e6efe2;
+  --popover: #172a22;
+  --popover-foreground: #e6efe2;
+  --primary: #86cc97;
+  --primary-foreground: #0f1f16;
+  --secondary: #1e3429;
+  --secondary-foreground: #e6efe2;
+  --muted: #1e3429;
+  --muted-foreground: #9fb5a5;
+  --accent: #23392d;
+  --accent-foreground: #e6efe2;
+  --border: #2a4235;
+  --input: #34503f;
+  --ring: #86cc97;
+  --leaf: #86cc97;
+  --jambu: #a9c97a;
+  --pass: #2a9d5a;
+  --reject: #d2463a;
+  --hold: #e8ab2a;
+  --sidebar: #142519;
+  --sidebar-foreground: #e6efe2;
+  --sidebar-primary: #86cc97;
+  --sidebar-primary-foreground: #0f1f16;
+  --sidebar-accent: #1e3429;
+  --sidebar-accent-foreground: #e6efe2;
+  --sidebar-border: #2a4235;
+  --sidebar-ring: #86cc97;
 }
 
 @layer base {
@@ -79,7 +132,23 @@
     color: var(--color-foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+    font-feature-settings: "tnum" 0;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
   }
+  select { background-color: var(--color-card); color: var(--color-foreground); }
+  .tabular { font-variant-numeric: tabular-nums; }
+  :focus-visible { outline: 3px solid var(--color-ring); outline-offset: 2px; }
+}
+
+/* Satu-satunya animasi otomatis: blok antrean berganti saat buah baru tiba */
+@keyframes krat-masuk {
+  from { transform: translateY(12px) scale(0.98); opacity: 0.4; }
+  to { transform: none; opacity: 1; }
+}
+.krat-masuk { animation: krat-masuk 360ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+@media (prefers-reduced-motion: reduce) {
+  .krat-masuk, .pulse-dot { animation: none; }
 }
 
 @keyframes pulse-dot {

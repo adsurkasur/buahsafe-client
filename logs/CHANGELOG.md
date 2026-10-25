@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased] - 2026-10-26 (rombak UI)
+### Added
+- Mode kios Antrean dengan bunyi/getar opsional dan layar penuh; mode gelap; halaman Analitik kecocokan model vs hasil belah; halaman Pengaturan bertab.
+
+### Changed
+- Seluruh tampilan dan struktur menu dirancang ulang; rute baru `/antrean`, `/riwayat`, `/analitik`, `/pengaturan` (rute lama dialihkan).
+
+### Removed
+- Halaman Perangkat terpisah dan panel notifikasi.
+
 ## [Unreleased] - 2026-10-25 (conveyor)
 ### Changed
 - Halaman Pemindaian menjadi Antrean Conveyor untuk operator di ujung belt.

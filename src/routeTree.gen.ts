@@ -10,16 +10,30 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ScanRouteImport } from './routes/scan'
+import { Route as RiwayatRouteImport } from './routes/riwayat'
+import { Route as PengaturanRouteImport } from './routes/pengaturan'
 import { Route as MasterDataRouteImport } from './routes/master-data'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as HistoryRouteImport } from './routes/history'
 import { Route as DevicesRouteImport } from './routes/devices'
+import { Route as AntreanRouteImport } from './routes/antrean'
 import { Route as AnalyticsRouteImport } from './routes/analytics'
+import { Route as AnalitikRouteImport } from './routes/analitik'
 import { Route as IndexRouteImport } from './routes/index'
 
 const ScanRoute = ScanRouteImport.update({
   id: '/scan',
   path: '/scan',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RiwayatRoute = RiwayatRouteImport.update({
+  id: '/riwayat',
+  path: '/riwayat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PengaturanRoute = PengaturanRouteImport.update({
+  id: '/pengaturan',
+  path: '/pengaturan',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MasterDataRoute = MasterDataRouteImport.update({
@@ -42,9 +56,19 @@ const DevicesRoute = DevicesRouteImport.update({
   path: '/devices',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AntreanRoute = AntreanRouteImport.update({
+  id: '/antrean',
+  path: '/antrean',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AnalyticsRoute = AnalyticsRouteImport.update({
   id: '/analytics',
   path: '/analytics',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AnalitikRoute = AnalitikRouteImport.update({
+  id: '/analitik',
+  path: '/analitik',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -55,69 +79,97 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/analitik': typeof AnalitikRoute
   '/analytics': typeof AnalyticsRoute
+  '/antrean': typeof AntreanRoute
   '/devices': typeof DevicesRoute
   '/history': typeof HistoryRoute
   '/login': typeof LoginRoute
   '/master-data': typeof MasterDataRoute
+  '/pengaturan': typeof PengaturanRoute
+  '/riwayat': typeof RiwayatRoute
   '/scan': typeof ScanRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/analitik': typeof AnalitikRoute
   '/analytics': typeof AnalyticsRoute
+  '/antrean': typeof AntreanRoute
   '/devices': typeof DevicesRoute
   '/history': typeof HistoryRoute
   '/login': typeof LoginRoute
   '/master-data': typeof MasterDataRoute
+  '/pengaturan': typeof PengaturanRoute
+  '/riwayat': typeof RiwayatRoute
   '/scan': typeof ScanRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/analitik': typeof AnalitikRoute
   '/analytics': typeof AnalyticsRoute
+  '/antrean': typeof AntreanRoute
   '/devices': typeof DevicesRoute
   '/history': typeof HistoryRoute
   '/login': typeof LoginRoute
   '/master-data': typeof MasterDataRoute
+  '/pengaturan': typeof PengaturanRoute
+  '/riwayat': typeof RiwayatRoute
   '/scan': typeof ScanRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/analitik'
     | '/analytics'
+    | '/antrean'
     | '/devices'
     | '/history'
     | '/login'
     | '/master-data'
+    | '/pengaturan'
+    | '/riwayat'
     | '/scan'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/analitik'
     | '/analytics'
+    | '/antrean'
     | '/devices'
     | '/history'
     | '/login'
     | '/master-data'
+    | '/pengaturan'
+    | '/riwayat'
     | '/scan'
   id:
     | '__root__'
     | '/'
+    | '/analitik'
     | '/analytics'
+    | '/antrean'
     | '/devices'
     | '/history'
     | '/login'
     | '/master-data'
+    | '/pengaturan'
+    | '/riwayat'
     | '/scan'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AnalitikRoute: typeof AnalitikRoute
   AnalyticsRoute: typeof AnalyticsRoute
+  AntreanRoute: typeof AntreanRoute
   DevicesRoute: typeof DevicesRoute
   HistoryRoute: typeof HistoryRoute
   LoginRoute: typeof LoginRoute
   MasterDataRoute: typeof MasterDataRoute
+  PengaturanRoute: typeof PengaturanRoute
+  RiwayatRoute: typeof RiwayatRoute
   ScanRoute: typeof ScanRoute
 }
 
@@ -128,6 +180,20 @@ declare module '@tanstack/react-router' {
       path: '/scan'
       fullPath: '/scan'
       preLoaderRoute: typeof ScanRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/riwayat': {
+      id: '/riwayat'
+      path: '/riwayat'
+      fullPath: '/riwayat'
+      preLoaderRoute: typeof RiwayatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pengaturan': {
+      id: '/pengaturan'
+      path: '/pengaturan'
+      fullPath: '/pengaturan'
+      preLoaderRoute: typeof PengaturanRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/master-data': {
@@ -158,11 +224,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DevicesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/antrean': {
+      id: '/antrean'
+      path: '/antrean'
+      fullPath: '/antrean'
+      preLoaderRoute: typeof AntreanRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/analytics': {
       id: '/analytics'
       path: '/analytics'
       fullPath: '/analytics'
       preLoaderRoute: typeof AnalyticsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/analitik': {
+      id: '/analitik'
+      path: '/analitik'
+      fullPath: '/analitik'
+      preLoaderRoute: typeof AnalitikRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -177,11 +257,15 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AnalitikRoute: AnalitikRoute,
   AnalyticsRoute: AnalyticsRoute,
+  AntreanRoute: AntreanRoute,
   DevicesRoute: DevicesRoute,
   HistoryRoute: HistoryRoute,
   LoginRoute: LoginRoute,
   MasterDataRoute: MasterDataRoute,
+  PengaturanRoute: PengaturanRoute,
+  RiwayatRoute: RiwayatRoute,
   ScanRoute: ScanRoute,
 }
 export const routeTree = rootRouteImport

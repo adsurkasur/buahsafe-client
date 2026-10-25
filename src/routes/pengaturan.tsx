@@ -1,0 +1,351 @@
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { zodValidator, fallback } from "@tanstack/zod-adapter";
+import { z } from "zod";
+import { FormEvent, useEffect, useState } from "react";
+import { formatDistanceToNow } from "date-fns";
+import { KeyRound, UserMinus, UserPlus, Sprout, Trash2, Cpu } from "lucide-react";
+import { toast } from "sonner";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { PageLayout } from "@/components/buahsafe/Layout";
+import { DeviceStatus, EmptyState } from "@/components/buahsafe/ui";
+import { apiFetch } from "@/lib/api";
+import { ROLE_LABELS, Role, useAuth } from "@/lib/auth";
+import { Device, fetchDeviceStatus, syncDevices } from "@/lib/buahsafe-data";
+
+const TABS = [
+  { id: "pengguna", label: "Pengguna", icon: UserPlus },
+  { id: "petani", label: "Petani mitra", icon: Sprout },
+  { id: "perangkat", label: "Perangkat", icon: Cpu },
+] as const;
+
+export const Route = createFileRoute("/pengaturan")({
+  validateSearch: zodValidator(z.object({ tab: fallback(z.enum(["pengguna", "petani", "perangkat"]), "pengguna").default("pengguna") })),
+  component: PengaturanPage,
+});
+
+const input = "w-full h-11 px-3 rounded-xl border border-input bg-background text-sm";
+const primaryBtn = "h-11 px-4 rounded-xl bg-primary text-primary-foreground text-sm font-semibold inline-flex items-center justify-center gap-2 disabled:opacity-50";
+const ghostBtn = "h-10 px-3 rounded-xl border border-border hover:bg-accent text-sm font-semibold inline-flex items-center gap-2";
+
+function PengaturanPage() {
+  const { tab } = Route.useSearch();
+  const navigate = useNavigate({ from: "/pengaturan" });
+  return (
+    <PageLayout title="Pengaturan" subtitle="Kelola akun pengguna, data petani mitra, dan alat pemindai." roles={["owner"]}>
+      <div className="flex gap-1 p-1 mb-6 rounded-2xl bg-secondary w-full sm:w-fit overflow-x-auto" role="tablist">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            role="tab"
+            aria-selected={tab === t.id}
+            onClick={() => navigate({ search: { tab: t.id }, replace: true })}
+            className={`flex-1 sm:flex-none h-11 px-3 sm:px-4 rounded-xl text-sm font-semibold inline-flex items-center justify-center gap-2 whitespace-nowrap ${
+              tab === t.id ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <t.icon className="w-4 h-4 hidden sm:block" /> {t.label}
+          </button>
+        ))}
+      </div>
+      {tab === "pengguna" && <UsersTab />}
+      {tab === "petani" && <PetaniTab />}
+      {tab === "perangkat" && <DeviceTab />}
+    </PageLayout>
+  );
+}
+
+// ---------------- Pengguna ----------------
+
+interface UserItem {
+  id: string;
+  username: string;
+  name: string;
+  role: Role;
+  last_login?: string;
+}
+
+function UsersTab() {
+  const { user: me } = useAuth();
+  const [users, setUsers] = useState<UserItem[]>([]);
+  const [form, setForm] = useState({ name: "", username: "", password: "", role: "operator" as Role });
+  const [saving, setSaving] = useState(false);
+  const [resetFor, setResetFor] = useState<UserItem | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [deactivate, setDeactivate] = useState<UserItem | null>(null);
+
+  const load = () => apiFetch<{ users: UserItem[] }>("api/users").then((r) => r.ok && setUsers(r.data?.users ?? []));
+  useEffect(() => {
+    load();
+  }, []);
+
+  const create = async (e: FormEvent) => {
+    e.preventDefault();
+    if (form.password.length < 6) {
+      toast.error("Kata sandi minimal 6 karakter");
+      return;
+    }
+    setSaving(true);
+    const res = await apiFetch<{ user: UserItem }>("api/users", {
+      method: "POST",
+      body: JSON.stringify({ ...form, name: form.name.trim(), username: form.username.trim().toLowerCase() }),
+    });
+    setSaving(false);
+    if (!res.ok) {
+      toast.error("Akun belum dibuat", { description: res.error });
+      return;
+    }
+    toast.success(`Akun ${res.data?.user.username} dibuat`);
+    setForm({ name: "", username: "", password: "", role: "operator" });
+    load();
+  };
+
+  const savePassword = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!resetFor) return;
+    if (newPassword.length < 6) {
+      toast.error("Kata sandi minimal 6 karakter");
+      return;
+    }
+    const res = await apiFetch(`api/users/${resetFor.id}/password`, { method: "PUT", body: JSON.stringify({ password: newPassword }) });
+    if (!res.ok) {
+      toast.error("Kata sandi belum diubah", { description: res.error });
+      return;
+    }
+    toast.success(`Kata sandi ${resetFor.username} diubah`);
+    setResetFor(null);
+    setNewPassword("");
+  };
+
+  const confirmDeactivate = async () => {
+    if (!deactivate) return;
+    const res = await apiFetch(`api/users/${deactivate.id}`, { method: "DELETE" });
+    if (!res.ok) toast.error("Akun belum dinonaktifkan", { description: res.error });
+    else toast.success(`Akun ${deactivate.username} dinonaktifkan`);
+    setDeactivate(null);
+    load();
+  };
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px] items-start">
+      <section className="rounded-2xl bg-card border border-border">
+        <h2 className="px-5 pt-5 pb-2 font-bold">Akun aktif</h2>
+        <ul>
+          {users.map((u) => {
+            const self = u.id === me?.id;
+            return (
+              <li key={u.id} data-testid="user-row" className="flex flex-wrap items-center gap-3 px-5 py-4 border-t border-border">
+                <div className="flex-1 min-w-[180px]">
+                  <div className="font-semibold">
+                    {u.name} {self && <span className="ml-1 text-xs font-semibold text-primary">(Anda)</span>}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    {ROLE_LABELS[u.role] ?? u.role}, nama pengguna <span className="font-semibold text-foreground">{u.username}</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {u.last_login ? `Terakhir masuk ${formatDistanceToNow(new Date(u.last_login), { addSuffix: true })}` : "Belum pernah masuk"}
+                  </div>
+                </div>
+                <button onClick={() => { setResetFor(u); setNewPassword(""); }} className={ghostBtn}>
+                  <KeyRound className="w-4 h-4" /> Ubah sandi
+                </button>
+                {!self && (
+                  <button onClick={() => setDeactivate(u)} className={`${ghostBtn} text-reject`} aria-label={`Nonaktifkan ${u.username}`}>
+                    <UserMinus className="w-4 h-4" /> Nonaktifkan
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+
+      <form onSubmit={create} className="rounded-2xl bg-card border border-border p-5 space-y-3">
+        <h2 className="font-bold">Tambah pengguna</h2>
+        <label className="block text-sm font-medium">Nama lengkap
+          <input required className={`${input} mt-1`} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        </label>
+        <label className="block text-sm font-medium">Nama pengguna
+          <input required className={`${input} mt-1`} autoCapitalize="none" spellCheck={false} autoComplete="off" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
+        </label>
+        <label className="block text-sm font-medium">Kata sandi awal
+          <input required type="password" minLength={6} className={`${input} mt-1`} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+          <span className="text-xs text-muted-foreground">Minimal 6 karakter. Sampaikan langsung kepada pemilik akun.</span>
+        </label>
+        <label className="block text-sm font-medium">Peran
+          <select className={`${input} mt-1`} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as Role })}>
+            <option value="operator">Operator sortasi (hanya antrean)</option>
+            <option value="supervisor">Supervisor QC (ringkasan, riwayat, label)</option>
+            <option value="owner">Pemilik (semua menu)</option>
+          </select>
+        </label>
+        <button type="submit" disabled={saving} className={`${primaryBtn} w-full`}>
+          <UserPlus className="w-5 h-5" /> Buat akun
+        </button>
+      </form>
+
+      <Dialog open={!!resetFor} onOpenChange={(o) => !o && setResetFor(null)}>
+        <DialogContent>
+          <form onSubmit={savePassword}>
+            <DialogHeader>
+              <DialogTitle>Ubah kata sandi</DialogTitle>
+              <DialogDescription>Akun {resetFor?.name} ({resetFor?.username}) akan keluar dari semua perangkat.</DialogDescription>
+            </DialogHeader>
+            <label className="block mt-4 text-sm font-medium">Kata sandi baru
+              <input autoFocus type="password" minLength={6} className={`${input} mt-1`} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+            </label>
+            <DialogFooter className="mt-5">
+              <button type="button" onClick={() => setResetFor(null)} className={ghostBtn}>Batal</button>
+              <button type="submit" className={primaryBtn}>Simpan kata sandi</button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deactivate} onOpenChange={(o) => !o && setDeactivate(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nonaktifkan {deactivate?.username}?</DialogTitle>
+            <DialogDescription>Akun tidak bisa masuk lagi. Riwayat pindaian tetap tersimpan.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4">
+            <button onClick={() => setDeactivate(null)} className={ghostBtn}>Batal</button>
+            <button onClick={confirmDeactivate} className={`${primaryBtn} bg-reject text-reject-ink`}>Nonaktifkan</button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ---------------- Petani mitra ----------------
+
+interface Petani {
+  id: string;
+  name: string;
+  village: string;
+  phone: string;
+  joined: string;
+}
+
+function PetaniTab() {
+  const [list, setList] = useState<Petani[]>([]);
+  const [form, setForm] = useState({ name: "", village: "", phone: "" });
+  const [remove, setRemove] = useState<Petani | null>(null);
+
+  const load = () => apiFetch<{ petani: Petani[] }>("api/master-data/petani").then((r) => r.ok && setList(r.data?.petani ?? []));
+  useEffect(() => {
+    load();
+  }, []);
+
+  const add = async (e: FormEvent) => {
+    e.preventDefault();
+    const res = await apiFetch("api/master-data/petani", { method: "POST", body: JSON.stringify(form) });
+    if (!res.ok) {
+      toast.error("Petani belum tersimpan", { description: res.error });
+      return;
+    }
+    toast.success(`${form.name} ditambahkan`);
+    setForm({ name: "", village: "", phone: "" });
+    load();
+  };
+
+  const confirmRemove = async () => {
+    if (!remove) return;
+    const res = await apiFetch(`api/master-data/petani/${remove.id}`, { method: "DELETE" });
+    if (!res.ok) toast.error("Petani belum dihapus", { description: res.error });
+    setRemove(null);
+    load();
+  };
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px] items-start">
+      <section className="rounded-2xl bg-card border border-border">
+        <h2 className="px-5 pt-5 pb-2 font-bold">Petani mitra</h2>
+        {list.length ? (
+          <ul>
+            {list.map((p) => (
+              <li key={p.id} className="flex flex-wrap items-center gap-3 px-5 py-4 border-t border-border">
+                <div className="flex-1 min-w-[180px]">
+                  <div className="font-semibold">{p.name}</div>
+                  <div className="text-sm text-muted-foreground">{[p.village, p.phone].filter((v) => v && v !== "—").join(", ") || "Tanpa alamat/kontak"}</div>
+                </div>
+                {p.phone && p.phone !== "—" && (
+                  <a className={ghostBtn} href={`https://wa.me/${p.phone.replace(/\D/g, "").replace(/^0/, "62")}`} target="_blank" rel="noreferrer">WhatsApp</a>
+                )}
+                <button onClick={() => setRemove(p)} className={`${ghostBtn} text-reject`} aria-label={`Hapus ${p.name}`}>
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="p-5 pt-0"><EmptyState title="Belum ada petani mitra">Tambahkan petani yang memasok buah ke rumah sortir.</EmptyState></div>
+        )}
+      </section>
+
+      <form onSubmit={add} className="rounded-2xl bg-card border border-border p-5 space-y-3">
+        <h2 className="font-bold">Tambah petani mitra</h2>
+        <label className="block text-sm font-medium">Nama petani atau kelompok tani
+          <input required className={`${input} mt-1`} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        </label>
+        <label className="block text-sm font-medium">Desa / kecamatan
+          <input className={`${input} mt-1`} value={form.village} onChange={(e) => setForm({ ...form, village: e.target.value })} />
+        </label>
+        <label className="block text-sm font-medium">Nomor telepon / WhatsApp
+          <input inputMode="tel" className={`${input} mt-1`} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+        </label>
+        <button type="submit" className={`${primaryBtn} w-full`}><Sprout className="w-5 h-5" /> Tambah petani</button>
+      </form>
+
+      <Dialog open={!!remove} onOpenChange={(o) => !o && setRemove(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Hapus {remove?.name}?</DialogTitle>
+            <DialogDescription>Data petani ini dihapus dari daftar mitra.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4">
+            <button onClick={() => setRemove(null)} className={ghostBtn}>Batal</button>
+            <button onClick={confirmRemove} className={`${primaryBtn} bg-reject text-reject-ink`}>Hapus</button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ---------------- Perangkat ----------------
+
+function DeviceTab() {
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [status, setStatus] = useState<Record<string, any> | null>(null);
+  useEffect(() => {
+    syncDevices().then(setDevices);
+    fetchDeviceStatus().then(setStatus);
+  }, []);
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      {devices.map((d) => (
+        <section key={d.id} className="rounded-2xl bg-card border border-border p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="font-bold">{d.name}</h2>
+              <div className="text-sm text-muted-foreground">{d.id}, {d.location}</div>
+            </div>
+            <DeviceStatus connected={d.status === "online"} simulator={!!status?.firmware?.startsWith("sim")} />
+          </div>
+          <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+            <div><dt className="text-muted-foreground">Firmware</dt><dd className="font-semibold">{status?.firmware ?? d.firmwareVersion}</dd></div>
+            <div><dt className="text-muted-foreground">Total pindaian</dt><dd className="font-semibold tabular">{d.totalScans.toLocaleString("id-ID")}</dd></div>
+            <div><dt className="text-muted-foreground">Sinyal WiFi</dt><dd className="font-semibold">{status?.rssi ? `${status.rssi} dBm` : "—"}</dd></div>
+            <div><dt className="text-muted-foreground">Mode</dt><dd className="font-semibold">{status?.mode === "conveyor" ? "Conveyor (PIR)" : status?.mode ?? "—"}</dd></div>
+          </dl>
+          <p className="mt-4 text-xs text-muted-foreground">
+            Nama alat dan kunci perangkat diatur di server (`BUAHSAFE_DEVICE_LABEL`, `BUAHSAFE_DEVICE_KEY`). Panduan
+            pemasangan dan kalibrasi ada di dokumen DEPLOY_SERVER_WIFI.
+          </p>
+        </section>
+      ))}
+      {!devices.length && <EmptyState title="Belum ada alat terdaftar" />}
+    </div>
+  );
+}
