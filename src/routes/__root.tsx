@@ -8,6 +8,7 @@ import {
 import { Toaster } from "sonner";
 
 import { AuthProvider } from "@/lib/auth";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 function NotFoundComponent() {
   return (
@@ -55,7 +56,9 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <Outlet />
+        <TooltipProvider delayDuration={250}>
+          <Outlet />
+        </TooltipProvider>
         <Toaster position="top-right" />
       </AuthProvider>
     </QueryClientProvider>

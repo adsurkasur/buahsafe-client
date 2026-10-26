@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased] - 2026-10-26 (masukan UI)
+### Added
+- Skeleton saat memuat, tooltip web, saklar mode terang/gelap, tombol putus/sambung alat, unduh data latih.
+
+### Changed
+- Label putusan seragam (Normal / Anomali / Gagal dinilai); mode terang bawaan; daftar antrean memuat buah terbaru; tombol layar penuh dua arah; label status suara.
+
 ## [Unreleased] - 2026-10-26 (rombak UI)
 ### Added
 - Mode kios Antrean dengan bunyi/getar opsional dan layar penuh; mode gelap; halaman Analitik kecocokan model vs hasil belah; halaman Pengaturan bertab.

@@ -3,14 +3,14 @@ import { zodValidator, fallback } from "@tanstack/zod-adapter";
 import { z } from "zod";
 import { FormEvent, useEffect, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
-import { KeyRound, UserMinus, UserPlus, Sprout, Trash2, Cpu } from "lucide-react";
+import { KeyRound, UserMinus, UserPlus, Sprout, Trash2, Cpu, Unplug, PlugZap } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PageLayout } from "@/components/buahsafe/Layout";
-import { DeviceStatus, EmptyState } from "@/components/buahsafe/ui";
+import { DeviceStatus, EmptyState, SkeletonRows, Tip } from "@/components/buahsafe/ui";
 import { apiFetch } from "@/lib/api";
 import { ROLE_LABELS, Role, useAuth } from "@/lib/auth";
-import { Device, fetchDeviceStatus, syncDevices } from "@/lib/buahsafe-data";
+import { Device, DeviceStatusInfo, fetchDeviceStatus, setDeviceEnabled, syncDevices } from "@/lib/buahsafe-data";
 
 const TABS = [
   { id: "pengguna", label: "Pengguna", icon: UserPlus },
@@ -66,7 +66,7 @@ interface UserItem {
 
 function UsersTab() {
   const { user: me } = useAuth();
-  const [users, setUsers] = useState<UserItem[]>([]);
+  const [users, setUsers] = useState<UserItem[] | null>(null);
   const [form, setForm] = useState({ name: "", username: "", password: "", role: "operator" as Role });
   const [saving, setSaving] = useState(false);
   const [resetFor, setResetFor] = useState<UserItem | null>(null);
@@ -129,8 +129,9 @@ function UsersTab() {
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px] items-start">
       <section className="rounded-2xl bg-card border border-border">
         <h2 className="px-5 pt-5 pb-2 font-bold">Akun aktif</h2>
+        {!users && <div className="px-5 pb-5"><SkeletonRows rows={3} className="h-16" /></div>}
         <ul>
-          {users.map((u) => {
+          {users?.map((u) => {
             const self = u.id === me?.id;
             return (
               <li key={u.id} data-testid="user-row" className="flex flex-wrap items-center gap-3 px-5 py-4 border-t border-border">
@@ -228,7 +229,7 @@ interface Petani {
 }
 
 function PetaniTab() {
-  const [list, setList] = useState<Petani[]>([]);
+  const [list, setList] = useState<Petani[] | null>(null);
   const [form, setForm] = useState({ name: "", village: "", phone: "" });
   const [remove, setRemove] = useState<Petani | null>(null);
 
@@ -261,7 +262,9 @@ function PetaniTab() {
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px] items-start">
       <section className="rounded-2xl bg-card border border-border">
         <h2 className="px-5 pt-5 pb-2 font-bold">Petani mitra</h2>
-        {list.length ? (
+        {!list ? (
+          <div className="px-5 pb-5"><SkeletonRows rows={3} className="h-16" /></div>
+        ) : list.length ? (
           <ul>
             {list.map((p) => (
               <li key={p.id} className="flex flex-wrap items-center gap-3 px-5 py-4 border-t border-border">
@@ -316,22 +319,39 @@ function PetaniTab() {
 // ---------------- Perangkat ----------------
 
 function DeviceTab() {
-  const [devices, setDevices] = useState<Device[]>([]);
-  const [status, setStatus] = useState<Record<string, any> | null>(null);
+  const [devices, setDevices] = useState<Device[] | null>(null);
+  const [status, setStatus] = useState<DeviceStatusInfo | null>(null);
+  const [confirm, setConfirm] = useState(false);
+  const enabled = status?.enabled !== false;
+  const refresh = () => fetchDeviceStatus().then(setStatus);
   useEffect(() => {
     syncDevices().then(setDevices);
-    fetchDeviceStatus().then(setStatus);
+    refresh();
+    const i = setInterval(refresh, 5000);
+    return () => clearInterval(i);
   }, []);
+
+  const toggle = async () => {
+    const res = await setDeviceEnabled(!enabled);
+    setConfirm(false);
+    if (!res.ok) return toast.error("Status alat belum berubah", { description: res.error });
+    toast.success(enabled ? "Alat diputus" : "Alat disambungkan kembali", {
+      description: enabled ? "Server menolak data dari alat sampai disambungkan lagi." : "Alat terhubung lagi pada detak berikutnya (paling lama 10 detik).",
+    });
+    refresh();
+  };
+
   return (
-    <div className="grid gap-4 md:grid-cols-2">
-      {devices.map((d) => (
+    <div className="grid gap-4 lg:grid-cols-2 items-start">
+      {!devices && <SkeletonRows rows={1} className="h-64" />}
+      {devices?.map((d) => (
         <section key={d.id} className="rounded-2xl bg-card border border-border p-5">
-          <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="font-bold">{d.name}</h2>
               <div className="text-sm text-muted-foreground">{d.id}, {d.location}</div>
             </div>
-            <DeviceStatus connected={d.status === "online"} simulator={!!status?.firmware?.startsWith("sim")} />
+            <DeviceStatus connected={status?.connected} simulator={!!status?.firmware?.startsWith("sim")} enabled={enabled} />
           </div>
           <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
             <div><dt className="text-muted-foreground">Firmware</dt><dd className="font-semibold">{status?.firmware ?? d.firmwareVersion}</dd></div>
@@ -339,13 +359,55 @@ function DeviceTab() {
             <div><dt className="text-muted-foreground">Sinyal WiFi</dt><dd className="font-semibold">{status?.rssi ? `${status.rssi} dBm` : "—"}</dd></div>
             <div><dt className="text-muted-foreground">Mode</dt><dd className="font-semibold">{status?.mode === "conveyor" ? "Conveyor (PIR)" : status?.mode ?? "—"}</dd></div>
           </dl>
-          <p className="mt-4 text-xs text-muted-foreground">
-            Nama alat dan kunci perangkat diatur di server (`BUAHSAFE_DEVICE_LABEL`, `BUAHSAFE_DEVICE_KEY`). Panduan
-            pemasangan dan kalibrasi ada di dokumen DEPLOY_SERVER_WIFI.
-          </p>
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <Tip label={enabled ? "Server berhenti menerima data dari alat ini (asli maupun simulator). Bisa disambungkan lagi kapan saja." : "Izinkan alat mengirim data lagi"}>
+              <button
+                onClick={() => (enabled ? setConfirm(true) : toggle())}
+                className={enabled ? `${ghostBtn} h-11 text-reject` : primaryBtn}
+              >
+                {enabled ? <Unplug className="w-4 h-4" /> : <PlugZap className="w-4 h-4" />}
+                {enabled ? "Putuskan alat" : "Sambungkan alat"}
+              </button>
+            </Tip>
+          </div>
         </section>
       ))}
-      {!devices.length && <EmptyState title="Belum ada alat terdaftar" />}
+
+      <section className="rounded-2xl bg-card border border-border p-5">
+        <h2 className="font-bold">Cara memasang alat</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Sistem ini melayani <strong className="text-foreground">satu alat</strong>. Alat tidak ditambahkan dari halaman ini:
+          alat tersambung sendiri ke server begitu firmware dan WiFi-nya benar. Menambah alat kedua memerlukan
+          pembaruan server oleh tim BuahSafe.
+        </p>
+        <ol className="mt-4 space-y-3 text-sm list-decimal pl-5">
+          <li>Tim BuahSafe memasang firmware ke ESP32 dengan kunci perangkat yang sama dengan server.</li>
+          <li>
+            Nyalakan alat. Bila belum mengenal WiFi, alat membuat hotspot <strong>BuahSafe-Setup</strong>. Sambungkan HP
+            ke hotspot itu, pilih WiFi rumah sortir, lalu masukkan kata sandinya. Kata sandi hotspot diberikan tim BuahSafe.
+          </li>
+          <li>Layar LCD alat menampilkan "BuahSafe siap" dan status di atas berubah menjadi <strong>Alat terhubung</strong> dalam 10 detik.</li>
+          <li>Jalankan belt dan lewatkan satu buah: hasilnya muncul di halaman Antrean.</li>
+        </ol>
+        <p className="mt-4 text-xs text-muted-foreground">
+          Bila status tetap "Alat tidak terhubung": periksa listrik alat, jangkauan WiFi, dan pastikan alat tidak sedang diputus di sini.
+        </p>
+      </section>
+
+      <Dialog open={confirm} onOpenChange={setConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Putuskan alat?</DialogTitle>
+            <DialogDescription>
+              Selama diputus, buah yang lewat conveyor tidak dinilai dan layar Antrean tidak bertambah. Data lama tetap tersimpan.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4">
+            <button onClick={() => setConfirm(false)} className={ghostBtn}>Batal</button>
+            <button onClick={toggle} className={`${primaryBtn} bg-reject text-reject-ink`}>Putuskan</button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

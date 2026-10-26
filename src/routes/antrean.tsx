@@ -1,11 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Volume2, VolumeX, Maximize, LogOut, LayoutDashboard, PlayCircle } from "lucide-react";
+import { Volume2, VolumeX, Maximize, Minimize, LogOut, LayoutDashboard, PlayCircle } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { AuthGate, OfflineBanner, useServerDown } from "@/components/buahsafe/Layout";
-import { BrandMark, DeviceStatus, VERDICT_CLASS, VERDICT_TEXT, Verdict } from "@/components/buahsafe/ui";
-import { fetchDeviceStatus, fetchQueue, requestSimulation, QueueItem } from "@/lib/buahsafe-data";
+import { BrandMark, DeviceStatus, SkeletonRows, ThemeToggle, Tip, VERDICT_CLASS, VERDICT_TEXT, Verdict } from "@/components/buahsafe/ui";
+import { Skeleton } from "@/components/ui/skeleton";
+import { DeviceStatusInfo, fetchDeviceStatus, fetchQueue, requestSimulation, QueueItem } from "@/lib/buahsafe-data";
 import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/antrean")({ component: AntreanPage });
@@ -14,6 +15,22 @@ export const Route = createFileRoute("/antrean")({ component: AntreanPage });
 const QUEUE_POLL_MS = 1000;
 const STATUS_POLL_MS = 5000;
 const SOUND_KEY = "buahsafe.antrean.suara";
+const btn = "h-11 px-3 rounded-xl border border-border bg-card hover:bg-accent text-sm font-semibold inline-flex items-center justify-center gap-2";
+
+/** Layar penuh yang bisa dimasuki dan ditinggalkan dari tombol yang sama. */
+function useFullscreen() {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    const sync = () => setOn(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", sync);
+    return () => document.removeEventListener("fullscreenchange", sync);
+  }, []);
+  const toggle = () => {
+    const p = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.();
+    p?.catch(() => {});
+  };
+  return { on, toggle };
+}
 
 /** Bunyi + getar untuk hasil yang perlu tindakan (MERAH/sisihkan). Bawaan mati: alat sudah berbunyi. */
 function useAlert() {
@@ -67,9 +84,10 @@ function Kiosk() {
   const { user, logout } = useAuth();
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [device, setDevice] = useState<{ connected: boolean; firmware?: string } | null>(null);
+  const [device, setDevice] = useState<DeviceStatusInfo | null>(null);
   const serverDown = useServerDown();
   const alert = useAlert();
+  const fs = useFullscreen();
   const lastId = useRef<number | null>(null);
 
   useEffect(() => {
@@ -108,7 +126,6 @@ function Kiosk() {
     if (res.ok) toast.success("Simulasi dimulai", { description: "10 buah lewat dalam sekitar satu menit." });
     else toast.error("Simulasi belum bisa dimulai", { description: res.error });
   };
-  const fullscreen = () => document.documentElement.requestFullscreen?.().catch(() => {});
 
   return (
     <div className="min-h-dvh flex flex-col bg-background">
@@ -118,39 +135,50 @@ function Kiosk() {
           <h1 className="text-lg font-extrabold leading-none">Antrean conveyor</h1>
           <div className="text-xs text-muted-foreground mt-1">Urutan layar sama dengan urutan buah di belt</div>
         </div>
-        <DeviceStatus connected={device?.connected} simulator={isSimulator} />
+        <DeviceStatus connected={device?.connected} simulator={isSimulator} enabled={device?.enabled !== false} />
         {canManage && isSimulator && device?.connected && (
-          <button onClick={simulate} className="h-11 px-3 rounded-xl bg-leaf text-primary-foreground text-sm font-semibold inline-flex items-center gap-2">
-            <PlayCircle className="w-5 h-5" /> Jalankan simulasi 10 buah
+          <Tip label="Kirim 10 buah rekaman data uji dari ESP32 virtual">
+            <button onClick={simulate} className="h-11 px-3 rounded-xl bg-leaf text-primary-foreground text-sm font-semibold inline-flex items-center gap-2">
+              <PlayCircle className="w-5 h-5" /> Jalankan simulasi 10 buah
+            </button>
+          </Tip>
+        )}
+        <Tip label={alert.enabled ? "Layar berbunyi dan bergetar untuk anomali dan gagal dinilai. Ketuk untuk mematikan." : "Hanya buzzer alat yang berbunyi. Ketuk untuk menyalakan bunyi di layar ini."}>
+          <button
+            onClick={alert.toggle}
+            aria-pressed={alert.enabled}
+            className={`${btn} ${alert.enabled ? "bg-primary text-primary-foreground border-primary hover:bg-primary/90" : ""}`}
+          >
+            {alert.enabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+            <span>{alert.enabled ? "Suara aktif" : "Suara nonaktif"}</span>
           </button>
-        )}
-        <button
-          onClick={alert.toggle}
-          aria-pressed={alert.enabled}
-          className={`h-11 px-3 rounded-xl border text-sm font-semibold inline-flex items-center gap-2 ${
-            alert.enabled ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-accent"
-          }`}
-        >
-          {alert.enabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
-          <span className="hidden sm:inline">{alert.enabled ? "Suara aktif" : "Aktifkan suara"}</span>
-        </button>
-        <button onClick={fullscreen} className="h-11 w-11 rounded-xl border border-border hover:bg-accent hidden sm:grid place-items-center" aria-label="Layar penuh">
-          <Maximize className="w-5 h-5" />
-        </button>
+        </Tip>
+        <ThemeToggle />
+        <Tip label={fs.on ? "Keluar dari layar penuh" : "Layar penuh"}>
+          <button onClick={fs.toggle} aria-pressed={fs.on} className={`${btn} w-11 px-0`} aria-label={fs.on ? "Keluar dari layar penuh" : "Layar penuh"}>
+            {fs.on ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
+          </button>
+        </Tip>
         {canManage && (
-          <Link to="/" className="h-11 w-11 rounded-xl border border-border hover:bg-accent grid place-items-center" aria-label="Ke ringkasan">
-            <LayoutDashboard className="w-5 h-5" />
-          </Link>
+          <Tip label="Buka halaman Ringkasan">
+            <Link to="/" className={btn}>
+              <LayoutDashboard className="w-5 h-5" /> <span className="hidden sm:inline">Ringkasan</span>
+            </Link>
+          </Tip>
         )}
-        <button onClick={logout} className="h-11 w-11 rounded-xl border border-border hover:bg-accent grid place-items-center" aria-label="Keluar">
-          <LogOut className="w-5 h-5" />
-        </button>
+        <Tip label="Keluar dari akun">
+          <button onClick={logout} className={btn} aria-label="Keluar">
+            <LogOut className="w-5 h-5" /> <span className="hidden sm:inline">Keluar</span>
+          </button>
+        </Tip>
       </header>
 
       {serverDown && <div className="px-4 sm:px-6 pt-4"><OfflineBanner /></div>}
 
-      <main className="flex-1 grid gap-4 p-4 sm:p-6 md:grid-cols-[minmax(0,1fr)_340px] min-h-0">
-        {latest ? (
+      <main className="flex-1 grid gap-4 p-4 sm:p-6 md:grid-cols-2 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] min-h-0">
+        {!loaded ? (
+          <Skeleton className="rounded-[28px] min-h-[52dvh] md:min-h-0" />
+        ) : latest ? (
           <section
             key={latest.id}
             data-testid="latest-fruit"
@@ -162,12 +190,13 @@ function Kiosk() {
               <span className="tabular">{format(new Date(latest.timestamp), "HH:mm:ss")}</span>
             </div>
             <div>
-              <div className="font-extrabold tabular leading-[0.85] tracking-tight text-[clamp(96px,24vw,260px)]">
+              <div className="font-extrabold tabular leading-[0.85] tracking-tight text-[clamp(96px,18vw,240px)]">
                 #{latest.seq}
               </div>
-              <div className="mt-4 font-extrabold tracking-tight text-[clamp(30px,6vw,68px)] leading-none">
-                {VERDICT_TEXT[latest.verdict].basket}
+              <div className="mt-4 font-extrabold tracking-tight text-[clamp(36px,6vw,72px)] leading-none">
+                {VERDICT_TEXT[latest.verdict].label}
               </div>
+              <div className="mt-2 text-[clamp(18px,2.4vw,26px)] font-bold opacity-95">{VERDICT_TEXT[latest.verdict].action}</div>
             </div>
             <div className="text-base sm:text-lg font-medium opacity-90">
               {latest.verdict === "GAGAL"
@@ -179,32 +208,38 @@ function Kiosk() {
           <section className="rounded-[28px] border-2 border-dashed border-border bg-card grid place-items-center min-h-[52dvh] md:min-h-0 p-8 text-center">
             <div>
               <BrandMark className="w-16 h-16 mx-auto" />
-              <div className="mt-4 text-2xl font-extrabold">{loaded ? "Menunggu buah pertama" : "Memuat antrean…"}</div>
-              {loaded && (
-                <p className="mt-2 text-muted-foreground max-w-[42ch] mx-auto">
-                  Jalankan belt. Hasil tiap buah muncul di sini otomatis saat sensor mendeteksinya.
-                </p>
-              )}
+              <div className="mt-4 text-2xl font-extrabold">Menunggu buah pertama</div>
+              <p className="mt-2 text-muted-foreground max-w-[42ch] mx-auto">
+                Jalankan belt. Hasil tiap buah muncul di sini otomatis saat sensor mendeteksinya.
+              </p>
             </div>
           </section>
         )}
 
         <aside className="rounded-[28px] bg-card border border-border flex flex-col min-h-0">
           <div className="px-5 pt-5 pb-3">
-            <h2 className="font-bold">Buah sebelumnya</h2>
-            <p className="text-sm text-muted-foreground">1 bip hijau, 3 bip panjang merah, 2 bip berulang sisihkan</p>
+            <h2 className="font-bold">Daftar buah</h2>
+            <p className="text-sm text-muted-foreground">Terbaru di atas. Buzzer alat: 1 bip normal, 3 bip panjang anomali, 2 bip berulang gagal dinilai.</p>
           </div>
-          <ol className="flex-1 overflow-y-auto px-3 pb-3 space-y-1.5" aria-label="Buah sebelumnya">
-            {queue.slice(1, 10).map((item) => (
-              <li key={item.id} data-testid="queue-row" className="flex items-center gap-3 rounded-2xl px-3 py-2.5 hover:bg-accent/60">
+          <ol className="flex-1 overflow-y-auto px-3 pb-3 space-y-1.5" aria-label="Daftar buah">
+            {!loaded && <li><SkeletonRows rows={6} /></li>}
+            {queue.slice(0, 10).map((item, i) => (
+              <li
+                key={item.id}
+                data-testid="queue-row"
+                className={`flex items-center gap-3 rounded-2xl px-3 py-2.5 ${i === 0 ? "bg-accent" : "hover:bg-accent/60"}`}
+              >
                 <span className="w-16 text-2xl font-extrabold tabular">#{item.seq}</span>
-                <span className="flex-1 text-sm text-muted-foreground tabular">{format(new Date(item.timestamp), "HH:mm:ss")}</span>
+                <span className="flex-1 text-sm text-muted-foreground tabular">
+                  {format(new Date(item.timestamp), "HH:mm:ss")}
+                  {i === 0 && <span className="ml-2 font-semibold text-foreground">Terbaru</span>}
+                </span>
                 <span className={`rounded-xl px-3 py-1.5 text-sm font-bold ${VERDICT_CLASS[item.verdict]}`}>
-                  {VERDICT_TEXT[item.verdict].basket}
+                  {VERDICT_TEXT[item.verdict].label}
                 </span>
               </li>
             ))}
-            {loaded && queue.length < 2 && <li className="px-3 py-6 text-sm text-muted-foreground">Belum ada buah sebelumnya.</li>}
+            {loaded && queue.length === 0 && <li className="px-3 py-6 text-sm text-muted-foreground">Belum ada buah hari ini.</li>}
           </ol>
         </aside>
       </main>

@@ -1,5 +1,19 @@
 # Activity Log
 
+### [2026-10-26 10:30] [Claude Code]
+- **Goal**: 13 masukan pengguna atas UI baru (konsistensi label, skeleton, mode terang, tooltip, layar penuh, suara, tablet, putus alat, data latih).
+- **Actions**:
+  - Satu kosakata putusan: Normal / Anomali / Gagal dinilai di semua halaman (sebelumnya campuran "keranjang hijau/merah", "sisihkan", "anomali"); buah GAGAL ikut riwayat, filter, KPI, dan grafik (warna kuning), keyakinan "—".
+  - Kerangka (skeleton) saat memuat di Antrean, Ringkasan, Riwayat, Analitik, dan Pengaturan, menggantikan teks "belum ada" yang muncul sebelum data tiba.
+  - Bawaan mode terang; saklar terang/gelap di Antrean, sidebar, dan bilah atas HP.
+  - Tooltip web (Radix) pada tombol yang hanya ikon, status alat, chip putusan, unduhan.
+  - Antrean: buah terbaru ikut di daftar (ditandai "Terbaru"); tombol layar penuh bisa masuk dan keluar; tombol suara menulis "Suara aktif"/"Suara nonaktif"; tombol Ringkasan dan Keluar berlabel; kolom seimbang di tablet.
+  - Umpan balik tombol: kursor tangan, transisi, efek tekan (dimatikan bila `prefers-reduced-motion`).
+  - Pengaturan > Perangkat: tombol Putuskan/Sambungkan alat dengan dialog konfirmasi; panduan pemasangan alat; penjelasan bahwa sistem melayani satu alat.
+  - Riwayat: "Unduh laporan (CSV)" dan "Unduh data latih (CSV)" (ekspor server untuk pelatihan ulang).
+- **Files Modified**: `index.html`, `src/styles.css`, `src/lib/buahsafe-data.ts`, `src/components/buahsafe/{ui,Sidebar}.tsx`, `src/routes/{__root,antrean,index,riwayat,analitik,pengaturan}.tsx`, `logs/*`.
+- **Verification**: `tsc --noEmit` bersih; `bun run build` sukses; uji Playwright 3 ukuran di buahsafe.vercel.app dicatat di `../pengujian/`.
+
 ### [2026-10-26 01:30] [Claude Code]
 - **Goal**: Rombak total UI/UX: menarik, fungsional, mudah dipakai operator di tablet/HP ujung belt.
 - **Actions**:

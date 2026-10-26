@@ -1,7 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { LayoutDashboard, ClipboardList, ScanLine, BarChart3, Settings, LogOut } from "lucide-react";
 import { useAuth, Role, ROLE_LABELS } from "@/lib/auth";
-import { BrandMark, ThemeToggle } from "./ui";
+import { BrandMark, ThemeToggle, Tip } from "./ui";
 
 interface NavItem {
   to: string;
@@ -74,12 +74,14 @@ export function AppSidebar() {
             </div>
             <ThemeToggle />
           </div>
-          <button
-            onClick={logout}
-            className="mt-3 w-full h-10 rounded-xl border border-border bg-card hover:bg-accent inline-flex items-center justify-center gap-2 text-sm font-semibold"
-          >
-            <LogOut className="w-4 h-4" /> Keluar
-          </button>
+          <Tip label="Keluar dari akun ini" side="top">
+            <button
+              onClick={logout}
+              className="mt-3 w-full h-10 rounded-xl border border-border bg-card hover:bg-accent inline-flex items-center justify-center gap-2 text-sm font-semibold"
+            >
+              <LogOut className="w-4 h-4" /> Keluar akun
+            </button>
+          </Tip>
         </div>
       )}
     </aside>
@@ -97,9 +99,11 @@ export function MobileTopBar() {
         {user && <div className="text-xs text-muted-foreground truncate mt-0.5">{user.name}, {ROLE_LABELS[user.role]}</div>}
       </div>
       <ThemeToggle />
-      <button onClick={logout} className="w-11 h-11 rounded-xl hover:bg-accent grid place-items-center" aria-label="Keluar">
-        <LogOut className="w-5 h-5" />
-      </button>
+      <Tip label="Keluar dari akun ini">
+        <button onClick={logout} className="h-11 px-3 rounded-xl border border-border bg-card hover:bg-accent inline-flex items-center gap-2 text-sm font-semibold" aria-label="Keluar">
+          <LogOut className="w-5 h-5" /> <span className="hidden sm:inline">Keluar</span>
+        </button>
+      </Tip>
     </header>
   );
 }

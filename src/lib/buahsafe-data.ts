@@ -6,7 +6,7 @@
  * salinan terakhir agar halaman tetap terbaca saat koneksi terputus.
  * Tidak ada data contoh/acak: angka di dasbor harus berasal dari pindaian nyata.
  */
-import { apiFetch } from "./api";
+import { apiFetch, API_BASE_URL, getAuthToken } from "./api";
 
 export interface Device {
   id: string;
@@ -29,7 +29,8 @@ export interface ScanRecord {
   deviceId: string;
   deviceName: string;
   timestamp: string;
-  result: "NORMAL" | "ANOMALI";
+  /** GAGAL = sensor atau model gagal menilai buah conveyor; buah disisihkan untuk diperiksa manual */
+  result: "NORMAL" | "ANOMALI" | "GAGAL";
   confidence: number;
   batchId: string;
   operatorId?: string;
@@ -38,9 +39,9 @@ export interface ScanRecord {
   label?: string;
 }
 
-// v3: cache v1 berisi data acak purwarupa, v2 hanya 6 kanal
-const DEVICES_KEY = "buahsafe.devices.v3";
-const SCANS_KEY = "buahsafe.scans.v3";
+// v4: v1 data acak purwarupa, v2 hanya 6 kanal, v3 belum memuat buah gagal dinilai
+const DEVICES_KEY = "buahsafe.devices.v4";
+const SCANS_KEY = "buahsafe.scans.v4";
 
 function readCache<T>(key: string): T[] {
   if (typeof window === "undefined") return [];
@@ -96,7 +97,7 @@ function toScanRecord(m: any, devices: Device[]): ScanRecord {
     deviceId,
     deviceName: devices.find((d) => d.id === deviceId)?.name || deviceId,
     timestamp,
-    result: m.prediction,
+    result: m.prediction === "NORMAL" || m.prediction === "ANOMALI" ? m.prediction : "GAGAL",
     confidence: Math.round(m.confidence ?? 0),
     // Batch = hari sortasi (server belum menyimpan kode batch tersendiri)
     batchId: `BATCH-${timestamp.slice(0, 10).replace(/-/g, "")}`,
@@ -106,9 +107,16 @@ function toScanRecord(m: any, devices: Device[]): ScanRecord {
   };
 }
 
+const CONVEYOR_ID = /^(CV|SIM)-\d{8}-\d{4}$/;
+
+/** Baris yang mewakili satu buah sortasi: punya putusan model, atau buah conveyor yang gagal dinilai. */
+function isSortingRow(m: any) {
+  return m.prediction === "NORMAL" || m.prediction === "ANOMALI" || (CONVEYOR_ID.test(m.fruit_id) && (m.prediction === "" || m.prediction === "GAGAL"));
+}
+
 /**
- * Sinkronisasi riwayat sortasi dari server. Hanya baris yang punya putusan model
- * (NORMAL/ANOMALI) yang dihitung; baris akuisisi dataset riset tanpa prediksi diabaikan.
+ * Sinkronisasi riwayat sortasi dari server. Baris akuisisi dataset riset (tanpa
+ * prediksi, bukan ID conveyor) diabaikan.
  */
 export async function syncScans(): Promise<ScanRecord[]> {
   // ponytail: 2000 baris terakhir; ganti ke /api/analytics + paginasi jika riwayat jauh lebih besar
@@ -118,7 +126,7 @@ export async function syncScans(): Promise<ScanRecord[]> {
   if (!res.ok || !Array.isArray(res.data?.measurements)) return getScans();
   const devices = getDevices();
   const scans = res.data.measurements
-    .filter((m) => m.prediction === "NORMAL" || m.prediction === "ANOMALI")
+    .filter(isSortingRow)
     .map((m) => toScanRecord(m, devices))
     .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
   writeCache(SCANS_KEY, scans);
@@ -143,7 +151,7 @@ export async function fetchQueue(limit = 12): Promise<QueueItem[] | null> {
   const res = await apiFetch<{ measurements: any[] }>(`api/measurements?limit=${limit}`, { timeoutMs: 4000 });
   if (!res.ok || !Array.isArray(res.data?.measurements)) return null;
   return res.data.measurements
-    .filter((m) => /^(CV|SIM)-\d{8}-\d{4}$/.test(m.fruit_id))
+    .filter((m) => CONVEYOR_ID.test(m.fruit_id))
     .map((m) => ({
       id: m.id,
       fruitId: m.fruit_id,
@@ -162,7 +170,43 @@ export async function requestSimulation(count: number) {
   return apiFetch<{ count: number }>("api/device/simulate", { method: "POST", body: JSON.stringify({ count }) });
 }
 
-export async function fetchDeviceStatus(): Promise<{ connected: boolean; firmware?: string; mode?: string } | null> {
+export interface DeviceStatusInfo {
+  connected: boolean;
+  enabled?: boolean;
+  firmware?: string;
+  mode?: string;
+  seconds_since_seen?: number | null;
+  last_trigger_ms?: number | null;
+  last_measure_ms?: number | null;
+  rssi?: string | null;
+}
+
+export async function setDeviceEnabled(enabled: boolean) {
+  return apiFetch<{ enabled: boolean }>("api/device/enabled", { method: "POST", body: JSON.stringify({ enabled }) });
+}
+
+/**
+ * Data latih untuk tim BuahSafe: ekspor server (18 kanal + label hasil belah), format
+ * yang dibaca `ml/evaluate_models.py --data`. Baris GAGAL tidak ikut.
+ */
+export async function downloadTrainingCsv(): Promise<string | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL.replace(/\/+$/, "")}/export.csv`, {
+      headers: { Authorization: `Bearer ${getAuthToken() ?? ""}` },
+    });
+    if (!res.ok) return `Server merespons status ${res.status}`;
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(await res.blob());
+    link.download = `buahsafe_data_latih_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+    return null;
+  } catch {
+    return "Tidak dapat terhubung ke server";
+  }
+}
+
+export async function fetchDeviceStatus(): Promise<DeviceStatusInfo | null> {
   const res = await apiFetch<{ device: any }>("api/status", { timeoutMs: 4000 });
   return res.ok ? res.data?.device ?? null : null;
 }

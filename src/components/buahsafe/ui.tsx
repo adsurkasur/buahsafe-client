@@ -1,5 +1,7 @@
-import { ReactNode, useEffect, useState } from "react";
+import { ReactElement, ReactNode, useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Skeleton } from "@/components/ui/skeleton";
 
 /** Penampang jambu kristal: kulit, daging, dan cincin biji. Dipakai sebagai logo. */
 export function BrandMark({ className = "w-9 h-9" }: { className?: string }) {
@@ -19,6 +21,18 @@ export function BrandMark({ className = "w-9 h-9" }: { className?: string }) {
   );
 }
 
+/** Tooltip web (bukan tooltip bawaan peramban) untuk tombol dan elemen yang perlu penjelasan. */
+export function Tip({ label, children, side = "bottom" }: { label: ReactNode; children: ReactElement; side?: "top" | "bottom" | "left" | "right" }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent side={side} className="max-w-[260px] text-[13px] leading-snug bg-foreground text-background">
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 export function PageHeader({ title, description, actions }: { title: string; description?: string; actions?: ReactNode }) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
@@ -31,29 +45,52 @@ export function PageHeader({ title, description, actions }: { title: string; des
   );
 }
 
-export function KpiTile({ label, value, hint, tone = "plain" }: {
+export function KpiTile({ label, value, hint, tone = "plain", loading = false }: {
   label: string;
   value: string;
   hint?: string;
   tone?: "plain" | "pass" | "reject" | "hold";
+  loading?: boolean;
 }) {
   const bar = { plain: "bg-leaf", pass: "bg-pass", reject: "bg-reject", hold: "bg-hold" }[tone];
   return (
     <div className="relative rounded-2xl bg-card border border-border p-5 overflow-hidden">
       <span className={`absolute left-0 top-5 bottom-5 w-1 rounded-r ${bar}`} aria-hidden="true" />
       <div className="text-sm font-medium text-muted-foreground">{label}</div>
-      <div className="mt-2 text-[34px] leading-none font-extrabold tabular tracking-tight">{value}</div>
-      {hint && <div className="mt-2 text-[13px] text-muted-foreground">{hint}</div>}
+      {loading ? (
+        <>
+          <Skeleton className="mt-3 h-8 w-20" />
+          <Skeleton className="mt-3 h-3.5 w-28" />
+        </>
+      ) : (
+        <>
+          <div className="mt-2 text-[34px] leading-none font-extrabold tabular tracking-tight">{value}</div>
+          {hint && <div className="mt-2 text-[13px] text-muted-foreground">{hint}</div>}
+        </>
+      )}
     </div>
   );
 }
 
 export type Verdict = "NORMAL" | "ANOMALI" | "GAGAL";
 
-export const VERDICT_TEXT: Record<Verdict, { basket: string; long: string }> = {
-  NORMAL: { basket: "Keranjang hijau", long: "Masukkan ke keranjang hijau" },
-  ANOMALI: { basket: "Keranjang merah", long: "Pisahkan ke keranjang merah" },
-  GAGAL: { basket: "Sisihkan", long: "Sisihkan untuk diperiksa manual" },
+/** Satu kosakata putusan untuk seluruh aplikasi: antrean, ringkasan, riwayat, analitik. */
+export const VERDICT_TEXT: Record<Verdict, { label: string; action: string; explain: string }> = {
+  NORMAL: {
+    label: "Normal",
+    action: "Masukkan ke keranjang normal",
+    explain: "Model menilai buah normal (lolos mutu).",
+  },
+  ANOMALI: {
+    label: "Anomali",
+    action: "Masukkan ke keranjang anomali",
+    explain: "Model menilai buah terindikasi rusak atau berhama di dalam.",
+  },
+  GAGAL: {
+    label: "Gagal dinilai",
+    action: "Sisihkan untuk diperiksa manual",
+    explain: "Sensor atau model gagal menilai buah ini (mis. buah lewat saat alat sibuk). Sisihkan dan periksa manual.",
+  },
 };
 
 export const VERDICT_CLASS: Record<Verdict, string> = {
@@ -62,26 +99,42 @@ export const VERDICT_CLASS: Record<Verdict, string> = {
   GAGAL: "bg-hold text-hold-ink",
 };
 
-export function VerdictChip({ verdict, compact = false }: { verdict: Verdict; compact?: boolean }) {
+export function VerdictChip({ verdict, size = "md" }: { verdict: Verdict; size?: "sm" | "md" }) {
   return (
-    <span className={`inline-flex items-center rounded-lg font-semibold whitespace-nowrap ${VERDICT_CLASS[verdict]} ${compact ? "px-2 py-0.5 text-xs" : "px-2.5 py-1 text-[13px]"}`}>
-      {compact ? (verdict === "GAGAL" ? "Sisihkan" : verdict === "NORMAL" ? "Normal" : "Anomali") : VERDICT_TEXT[verdict].basket}
-    </span>
+    <Tip label={VERDICT_TEXT[verdict].explain}>
+      <span
+        tabIndex={0}
+        className={`inline-flex items-center rounded-lg font-semibold whitespace-nowrap cursor-help ${VERDICT_CLASS[verdict]} ${
+          size === "sm" ? "px-2 py-0.5 text-xs" : "px-2.5 py-1 text-[13px]"
+        }`}
+      >
+        {VERDICT_TEXT[verdict].label}
+      </span>
+    </Tip>
   );
 }
 
-export function DeviceStatus({ connected, simulator }: { connected?: boolean; simulator?: boolean }) {
+export function DeviceStatus({ connected, simulator, enabled = true }: { connected?: boolean; simulator?: boolean; enabled?: boolean }) {
+  const text = !enabled ? "Alat diputus pemilik" : connected ? "Alat terhubung" : "Alat tidak terhubung";
+  const help = !enabled
+    ? "Pemilik memutus alat di Pengaturan > Perangkat. Buah tidak dinilai sampai alat disambungkan lagi."
+    : connected
+      ? "Alat mengirim detak ke server dalam 25 detik terakhir."
+      : "Server belum menerima detak dari alat. Periksa listrik dan WiFi alat.";
   return (
-    <span
-      className={`inline-flex items-center gap-2 h-9 px-3 rounded-full text-sm font-semibold border ${
-        connected ? "bg-pass/10 border-pass/30 text-pass" : "bg-muted border-border text-muted-foreground"
-      }`}
-      role="status"
-    >
-      <span className={`w-2 h-2 rounded-full ${connected ? "bg-pass pulse-dot" : "bg-muted-foreground/60"}`} />
-      {connected ? "Alat terhubung" : "Alat tidak terhubung"}
-      {simulator && <span className="rounded-md bg-leaf text-primary-foreground px-1.5 text-[11px]">Simulator</span>}
-    </span>
+    <Tip label={help}>
+      <span
+        tabIndex={0}
+        role="status"
+        className={`inline-flex items-center gap-2 h-10 px-3 rounded-full text-sm font-semibold border cursor-help ${
+          !enabled ? "bg-hold/15 border-hold/40" : connected ? "bg-pass/10 border-pass/30 text-pass" : "bg-muted border-border text-muted-foreground"
+        }`}
+      >
+        <span className={`w-2 h-2 rounded-full ${!enabled ? "bg-hold" : connected ? "bg-pass pulse-dot" : "bg-muted-foreground/60"}`} />
+        {text}
+        {simulator && <span className="rounded-md bg-leaf text-primary-foreground px-1.5 text-[11px]">Simulator</span>}
+      </span>
+    </Tip>
   );
 }
 
@@ -95,10 +148,21 @@ export function EmptyState({ title, children }: { title: string; children?: Reac
   );
 }
 
+/** Baris kerangka saat data dimuat: bentuknya mirip isi sebenarnya agar tidak "melompat". */
+export function SkeletonRows({ rows = 6, className = "h-12" }: { rows?: number; className?: string }) {
+  return (
+    <div className="space-y-2" aria-busy="true" aria-label="Memuat data">
+      {Array.from({ length: rows }, (_, i) => (
+        <Skeleton key={i} className={`w-full rounded-xl ${className}`} />
+      ))}
+    </div>
+  );
+}
+
 const THEME_KEY = "buahsafe.theme";
 
-/** Mode terang/gelap; bawaan mengikuti pengaturan perangkat. */
-export function ThemeToggle({ className = "" }: { className?: string }) {
+/** Saklar mode terang/gelap. Bawaan terang (meja sortasi di tempat terang). */
+export function ThemeToggle({ className = "", withLabel = false }: { className?: string; withLabel?: boolean }) {
   const [dark, setDark] = useState(() => typeof document !== "undefined" && document.documentElement.classList.contains("dark"));
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
@@ -111,14 +175,18 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
     } catch {}
   };
   return (
-    <button
-      onClick={toggle}
-      className={`inline-flex items-center justify-center w-11 h-11 rounded-xl hover:bg-accent text-muted-foreground hover:text-foreground ${className}`}
-      aria-label={dark ? "Gunakan mode terang" : "Gunakan mode gelap"}
-      title={dark ? "Mode terang" : "Mode gelap"}
-    >
-      {dark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-    </button>
+    <Tip label={dark ? "Ganti ke mode terang (cocok untuk ruangan terang)" : "Ganti ke mode gelap"}>
+      <button
+        onClick={toggle}
+        aria-label={dark ? "Mode gelap aktif, ganti ke mode terang" : "Mode terang aktif, ganti ke mode gelap"}
+        className={`inline-flex items-center justify-center gap-2 h-11 rounded-xl border border-border bg-card hover:bg-accent text-sm font-semibold ${
+          withLabel ? "px-3" : "w-11"
+        } ${className}`}
+      >
+        {dark ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+        {withLabel && <span>{dark ? "Mode gelap" : "Mode terang"}</span>}
+      </button>
+    </Tip>
   );
 }
 
@@ -127,7 +195,7 @@ export function useChartColors() {
   const read = () => {
     const css = getComputedStyle(document.documentElement);
     const v = (name: string) => css.getPropertyValue(name).trim();
-    return { pass: v("--pass"), reject: v("--reject"), grid: v("--border"), text: v("--muted-foreground"), card: v("--card"), accent: v("--accent") };
+    return { pass: v("--pass"), reject: v("--reject"), hold: v("--hold"), grid: v("--border"), text: v("--muted-foreground"), card: v("--card"), accent: v("--accent") };
   };
   const [colors, setColors] = useState(read);
   useEffect(() => {

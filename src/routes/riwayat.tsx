@@ -3,16 +3,16 @@ import { zodValidator, fallback } from "@tanstack/zod-adapter";
 import { z } from "zod";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
-import { Download, Search, ChevronDown } from "lucide-react";
+import { Download, Search, ChevronDown, Database } from "lucide-react";
 import { toast } from "sonner";
 import { PageLayout } from "@/components/buahsafe/Layout";
-import { EmptyState, VerdictChip } from "@/components/buahsafe/ui";
+import { EmptyState, SkeletonRows, Tip, VerdictChip } from "@/components/buahsafe/ui";
 import { SpectralMiniChart } from "@/components/buahsafe/SpectralMiniChart";
-import { getScans, syncScans, setScanLabel, ScanRecord, WAVELENGTHS } from "@/lib/buahsafe-data";
+import { downloadTrainingCsv, getScans, syncScans, setScanLabel, ScanRecord, WAVELENGTHS } from "@/lib/buahsafe-data";
 import { useAuth } from "@/lib/auth";
 
 const searchSchema = z.object({
-  result: fallback(z.enum(["all", "NORMAL", "ANOMALI"]), "all").default("all"),
+  result: fallback(z.enum(["all", "NORMAL", "ANOMALI", "GAGAL"]), "all").default("all"),
   label: fallback(z.enum(["all", "unlabeled"]), "all").default("all"),
   q: fallback(z.string(), "").default(""),
   from: fallback(z.string(), "").default(""),
@@ -33,10 +33,14 @@ function RiwayatPage() {
   const { user } = useAuth();
   const [scans, setScans] = useState<ScanRecord[]>(getScans());
   const [openId, setOpenId] = useState<string | null>(null);
+  const [synced, setSynced] = useState(false);
   const canLabel = user?.role === "supervisor" || user?.role === "owner";
 
   useEffect(() => {
-    syncScans().then(setScans);
+    syncScans().then((s) => {
+      setScans(s);
+      setSynced(true);
+    });
   }, []);
 
   const set = (key: keyof typeof search, value: string) =>
@@ -55,6 +59,14 @@ function RiwayatPage() {
 
   const unlabeled = rows.filter((s) => !s.label).length;
   const normal = rows.filter((s) => s.result === "NORMAL").length;
+  const judged = rows.filter((s) => s.result !== "GAGAL").length;
+  const conf = (s: ScanRecord) => (s.result === "GAGAL" ? "—" : `${s.confidence}%`);
+
+  const downloadTraining = async () => {
+    const err = await downloadTrainingCsv();
+    if (err) toast.error("Data latih belum terunduh", { description: err });
+    else toast.success("Data latih terunduh", { description: "Kirim berkas ini ke tim BuahSafe untuk pelatihan ulang model." });
+  };
 
   const changeLabel = async (scan: ScanRecord, label: Label) => {
     const res = await setScanLabel(scan.id, label);
@@ -102,9 +114,20 @@ function RiwayatPage() {
       subtitle="Telusuri hasil sortasi dan catat hasil belah buah sampel untuk melatih ulang model."
       roles={["supervisor", "owner"]}
       actions={
-        <button onClick={downloadCSV} disabled={!rows.length} className="h-11 px-4 rounded-xl border border-border bg-card hover:bg-accent text-sm font-semibold inline-flex items-center gap-2 disabled:opacity-50">
-          <Download className="w-5 h-5" /> Unduh CSV
-        </button>
+        <>
+          <Tip label="Daftar buah sesuai filter di bawah, untuk laporan harian">
+            <button onClick={downloadCSV} disabled={!rows.length} className="h-11 px-4 rounded-xl border border-border bg-card hover:bg-accent text-sm font-semibold inline-flex items-center gap-2 disabled:opacity-50">
+              <Download className="w-5 h-5" /> Unduh laporan (CSV)
+            </button>
+          </Tip>
+          {canLabel && (
+            <Tip label="Semua buah berlabel hasil belah beserta 18 kanal spektrum, format yang dipakai tim untuk melatih ulang model">
+              <button onClick={downloadTraining} className="h-11 px-4 rounded-xl bg-primary text-primary-foreground text-sm font-semibold inline-flex items-center gap-2">
+                <Database className="w-5 h-5" /> Unduh data latih (CSV)
+              </button>
+            </Tip>
+          )}
+        </>
       }
     >
       <div className="flex flex-wrap gap-2 mb-4">
@@ -117,6 +140,7 @@ function RiwayatPage() {
           <option value="all">Semua putusan</option>
           <option value="NORMAL">Normal</option>
           <option value="ANOMALI">Anomali</option>
+          <option value="GAGAL">Gagal dinilai</option>
         </select>
         <select value={search.label} onChange={(e) => set("label", e.target.value)} className={field} aria-label="Status label">
           <option value="all">Semua label</option>
@@ -127,10 +151,12 @@ function RiwayatPage() {
       </div>
 
       <p className="mb-3 text-sm text-muted-foreground">
-        {rows.length} buah, {rows.length ? Math.round((normal / rows.length) * 100) : 0}% lolos menurut model, {unlabeled} belum dilabel.
+        {rows.length} buah, {judged ? Math.round((normal / judged) * 100) : 0}% normal menurut model, {unlabeled} belum dilabel.
       </p>
 
-      {rows.length === 0 ? (
+      {!synced && !scans.length ? (
+        <SkeletonRows rows={8} />
+      ) : rows.length === 0 ? (
         <EmptyState title="Tidak ada buah yang cocok">Ubah kata kunci atau rentang tanggal.</EmptyState>
       ) : (
         <>
@@ -159,8 +185,8 @@ function RiwayatPage() {
                     >
                       <td className="px-4 py-3 tabular whitespace-nowrap">{format(new Date(s.timestamp), "d MMM, HH:mm:ss")}</td>
                       <td className="px-4 py-3 font-semibold">{s.fruitId}</td>
-                      <td className="px-4 py-3"><VerdictChip verdict={s.result} compact /></td>
-                      <td className="px-4 py-3 text-right tabular">{s.confidence}%</td>
+                      <td className="px-4 py-3"><VerdictChip verdict={s.result} size="sm" /></td>
+                      <td className="px-4 py-3 text-right tabular">{conf(s)}</td>
                       <td className="px-4 py-3">{labelControl(s)}</td>
                       <td className="px-2 py-3">
                         <ChevronDown className={`w-5 h-5 text-muted-foreground transition-transform ${openId === s.id ? "rotate-180" : ""}`} aria-hidden="true" />
@@ -184,10 +210,10 @@ function RiwayatPage() {
                 <button className="w-full text-left" onClick={() => setOpenId(openId === s.id ? null : s.id)} aria-expanded={openId === s.id}>
                   <div className="flex items-center justify-between gap-3">
                     <span className="font-bold">{s.fruitId}</span>
-                    <VerdictChip verdict={s.result} compact />
+                    <VerdictChip verdict={s.result} size="sm" />
                   </div>
                   <div className="mt-1 text-sm text-muted-foreground tabular">
-                    {format(new Date(s.timestamp), "d MMM yyyy, HH:mm:ss")}, keyakinan {s.confidence}%
+                    {format(new Date(s.timestamp), "d MMM yyyy, HH:mm:ss")}, keyakinan {conf(s)}
                   </div>
                 </button>
                 <div className="mt-3">{labelControl(s)}</div>

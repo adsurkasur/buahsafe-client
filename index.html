@@ -9,7 +9,8 @@
       // Terapkan mode gelap sebelum halaman tergambar (tanpa kedip terang)
       try {
         var t = localStorage.getItem("buahsafe.theme");
-        if (t === "dark" || (!t && matchMedia("(prefers-color-scheme: dark)").matches)) document.documentElement.classList.add("dark");
+        // Bawaan terang: meja sortasi berada di tempat terang. Gelap hanya bila dipilih pengguna.
+        if (t === "dark") document.documentElement.classList.add("dark");
       } catch (e) {}
     </script>
     <meta name="description" content="Sortasi mutu jambu kristal tanpa merusak buah dengan spektroskopi optik Visible-NIR (AS7265x)." />

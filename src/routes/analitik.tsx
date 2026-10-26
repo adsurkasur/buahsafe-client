@@ -4,6 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 import { format, startOfDay, subDays } from "date-fns";
 import { PageLayout } from "@/components/buahsafe/Layout";
 import { EmptyState, KpiTile, useChartColors } from "@/components/buahsafe/ui";
+import { Skeleton } from "@/components/ui/skeleton";
 import { getScans, syncScans, ScanRecord } from "@/lib/buahsafe-data";
 
 export const Route = createFileRoute("/analitik")({ component: AnalitikPage });
@@ -13,15 +14,22 @@ const PERIODS = [7, 30, 90] as const;
 function AnalitikPage() {
   const [scans, setScans] = useState<ScanRecord[]>(getScans());
   const [days, setDays] = useState<(typeof PERIODS)[number]>(30);
+  const [synced, setSynced] = useState(false);
   const c = useChartColors();
 
   useEffect(() => {
-    syncScans().then(setScans);
+    syncScans().then((s) => {
+      setScans(s);
+      setSynced(true);
+    });
   }, []);
+  const loading = !synced && !scans.length;
 
   const since = startOfDay(subDays(new Date(), days - 1)).getTime();
   const inPeriod = scans.filter((s) => new Date(s.timestamp).getTime() >= since);
-  const normal = inPeriod.filter((s) => s.result === "NORMAL").length;
+  const count = (list: ScanRecord[], r: ScanRecord["result"]) => list.filter((s) => s.result === r).length;
+  const normal = count(inPeriod, "NORMAL");
+  const judged = normal + count(inPeriod, "ANOMALI");
   const labeled = inPeriod.filter((s) => s.label);
   // Kecocokan putusan model dengan hasil belah: perkiraan akurasi di lapangan
   const cell = (label: string, result: string) => labeled.filter((s) => s.label === label && s.result === result).length;
@@ -36,8 +44,7 @@ function AnalitikPage() {
       const t = new Date(s.timestamp).getTime();
       return t >= day.getTime() && t < next;
     });
-    const n = ds.filter((s) => s.result === "NORMAL").length;
-    return { hari: format(day, days > 30 ? "d/M" : "d MMM"), Normal: n, Anomali: ds.length - n };
+    return { hari: format(day, days > 30 ? "d/M" : "d MMM"), Normal: count(ds, "NORMAL"), Anomali: count(ds, "ANOMALI"), "Gagal dinilai": count(ds, "GAGAL") };
   });
 
   return (
@@ -61,10 +68,11 @@ function AnalitikPage() {
       }
     >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <KpiTile label="Buah dinilai" value={inPeriod.length ? inPeriod.length.toLocaleString("id-ID") : "—"} hint={`${days} hari terakhir`} />
-        <KpiTile label="Lolos menurut model" value={inPeriod.length ? `${Math.round((normal / inPeriod.length) * 100)}%` : "—"} hint="putusan model, bukan hasil belah" tone="pass" />
-        <KpiTile label="Buah sampel dibelah" value={labeled.length ? String(labeled.length) : "—"} hint="dilabel di Riwayat & label" />
+        <KpiTile loading={loading} label="Buah dipindai" value={inPeriod.length ? inPeriod.length.toLocaleString("id-ID") : "—"} hint={`${days} hari terakhir`} />
+        <KpiTile loading={loading} label="Normal menurut model" value={judged ? `${Math.round((normal / judged) * 100)}%` : "—"} hint="putusan model, bukan hasil belah" tone="pass" />
+        <KpiTile loading={loading} label="Buah sampel dibelah" value={labeled.length ? String(labeled.length) : "—"} hint="dilabel di Riwayat & label" />
         <KpiTile
+          loading={loading}
           label="Model sesuai hasil belah"
           value={labeled.length ? `${Math.round((agree / labeled.length) * 100)}%` : "—"}
           hint={labeled.length ? `${agree} dari ${labeled.length} buah sampel` : "Belum ada buah berlabel"}
@@ -74,8 +82,10 @@ function AnalitikPage() {
 
       <section className="mt-6 rounded-2xl bg-card border border-border p-5">
         <h2 className="font-bold">Volume harian</h2>
-        <p className="text-sm text-muted-foreground">Buah normal dan anomali per hari menurut model</p>
-        {inPeriod.length ? (
+        <p className="text-sm text-muted-foreground">Buah normal, anomali, dan gagal dinilai per hari menurut model</p>
+        {loading ? (
+          <Skeleton className="h-72 mt-4 rounded-xl" />
+        ) : inPeriod.length ? (
           <div className="h-72 mt-4">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={daily} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
@@ -84,7 +94,8 @@ function AnalitikPage() {
                 <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={12} stroke={c.text} />
                 <Tooltip cursor={{ fill: c.accent }} contentStyle={{ borderRadius: 12, border: `1px solid ${c.grid}`, background: c.card }} />
                 <Bar dataKey="Normal" stackId="a" fill={c.pass} />
-                <Bar dataKey="Anomali" stackId="a" fill={c.reject} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Anomali" stackId="a" fill={c.reject} />
+                <Bar dataKey="Gagal dinilai" stackId="a" fill={c.hold} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
