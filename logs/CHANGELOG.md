@@ -3,6 +3,20 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased] - 2026-10-28 (penyempurnaan UI/UX, batch petani & kalkulator multi-grade)
+### Added
+- Badge tingkat keyakinan model kualitatif (`Tinggi`, `Sedang`, `Rendah — Mendekati Ambang`) di Antrean, Ringkasan, dan Riwayat.
+- Pemilih **Batch / Petani Mitra Aktif** di header kios `/antrean` dan banner sesi batch aktif di `/`.
+- Dialog **Sampling Belah Cepat (`#NNNN`)** di `/riwayat` untuk pencatatan cepat hasil belah QC oleh Supervisor/Owner.
+- Sorotan 6 kanal fitur model NIR (`610, 680, 730, 760, 810, 860 nm`) dan anotasi kanal kunci `730 nm` & `810 nm` pada `SpectralMiniChart`.
+- Tab **`Tarif & grade`** (Dynamic Grade Builder: opsi `Rp / kg` atau `Rp / butir`, bobot rata-rata per buah, tambah/hapus grade komersial, harga afkir) di `/pengaturan`.
+- Kartu KPI **Estimasi Nilai Risiko Kerugian yang Dicegah (Rp)** dan tabel **Mutu Pasokan per Petani Mitra** di `/analitik`.
+
+### Changed
+- Tombol utilitas di header `/antrean` dirampingkan ke dalam satu menu dropdown `Pengaturan tampilan`; tombol simulasi disembunyikan dari peran `operator`.
+- Rute `/analitik` kini dapat diakses oleh `supervisor` dan `owner`; pengguna `operator` otomatis diarahkan ke `/antrean` tanpa layar blokir akses.
+- Filter rentang tanggal di `/riwayat` dirampingkan ke dalam popover `Rentang tanggal` dengan tombol `Reset filter`, dan tombol `[Spektrum]` dipisahkan dari pemilih label.
+
 ## [Unreleased] - 2026-10-26 (masukan UI)
 ### Added
 - Skeleton saat memuat, tooltip web, saklar mode terang/gelap, tombol putus/sambung alat, unduh data latih.

@@ -1,5 +1,17 @@
 # Decision Log (Architecture Decision Records)
 
+### [DEC-005] Penyempurnaan Alur Multi-Peran, Indikator Keyakinan Kualitatif, Pelacakan Batch Petani, dan Kalkulator Finansial Multi-Grade
+- **Date**: 2026-10-28
+- **Status**: Accepted (memperbarui sebagian DEC-004 untuk akses Analitik Supervisor dan navigasi Operator)
+- **Context**: Audit UI/UX menemukan beberapa gesekan operasional: (1) operator yang masuk ke `/` melihat layar akses ditolak, sementara header kios `/antrean` terlalu padat di layar HP dan menampilkan tombol simulasi; (2) angka persentase keyakinan mentah sulit ditafsirkan cepat tanpa kategori kualitatif; (3) supervisor QC membutuhkan akses ke `/analitik` dan input hasil belah cepat berdasarkan nomor urut `#NNNN`; (4) pemilik gudang membutuhkan metrik finansial **Estimasi Kerugian Dicegah (Rp)** dengan skema harga multi-grade yang fleksibel serta rekap mutu per petani mitra.
+- **Decision**:
+  1. Mengalihkan `operator` secara mulus ke `/antrean`, mengomentari layar blokir peran di `Layout.tsx`, dan membuka `/analitik` untuk `supervisor` serta `owner`.
+  2. Menampilkan kategori keyakinan kualitatif (`Tinggi` $\ge 80\%$, `Sedang` $60\text{--}79\%$, `Rendah — Mendekati Ambang` $< 60\%$) mendampingi persentase model di seluruh halaman.
+  3. Menyediakan pemilih **Batch / Petani Mitra Aktif** di kios `/antrean`, dialog **Sampling Belah Cepat (`#NNNN`)** di `/riwayat`, dan penanda 6 kanal model NIR (sorotan 730 & 810 nm) di `SpectralMiniChart`.
+  4. Menyediakan **Dynamic Grade Builder** di `/pengaturan?tab=tarif` (`Rp / kg` atau `Rp / butir`, bobot rata-rata gram, daftar grade komersial dinamis, harga sisa afkir) sebagai dasar perhitungan **Estimasi Kerugian Dicegah (Rp)** dan tabel **Mutu Pasokan per Petani Mitra** di `/analitik`.
+- **Alternatives**: Menetapkan rumus harga statis dua grade di kode frontend (ditolak: skema harga gudang bervariasi menurut musim, ukuran, dan jumlah grade).
+- **Affected**: `src/lib/buahsafe-data.ts`, `src/components/buahsafe/{ui,Layout,Sidebar,SpectralMiniChart}.tsx`, `src/routes/{index,antrean,riwayat,pengaturan,analitik}.tsx`.
+
 ### [DEC-004] Struktur Menu Berbasis Peran dan Mode Kios Operator
 - **Date**: 2026-10-26
 - **Status**: Accepted

@@ -1,5 +1,16 @@
 # Activity Log
 
+### [2026-10-28 10:33] [Antigravity]
+- **Goal**: Penyempurnaan UI/UX berbasis audit multi-role (`operator`, `supervisor`, `owner`), indikator tingkat keyakinan model kualitatif, pelacakan batch petani mitra aktif, sampling belah cepat QC, serta kalkulator finansial multi-grade.
+- **Actions**:
+  - Menambahkan helper `getConfidenceTier` dan komponen `<ConfidenceBadge />` (`Tinggi`, `Sedang`, `Rendah — Mendekati Ambang`) di `src/components/buahsafe/ui.tsx` serta integrasi API batch aktif dan harga multi-grade di `src/lib/buahsafe-data.ts`.
+  - Menonaktifkan (comment out) blok penghalang akses `"Halaman ini bukan untuk peran Anda"` pada `AuthGate` di `src/components/buahsafe/Layout.tsx`, mengarahkan otomatis `operator` dari `/` ke `/antrean`, dan membuka akses `/analitik` bagi `supervisor` & `owner` di `src/components/buahsafe/Sidebar.tsx`.
+  - Merampingkan header kios `/antrean` ke dalam menu dropdown `Pengaturan tampilan`, menyembunyikan tombol simulasi dari `operator`, dan menambahkan pemilih **Batch / Petani Mitra Aktif**.
+  - Merampingkan baris filter di `/riwayat` (filter tanggal dalam popover + tombol `Reset filter`), menambahkan dialog **Sampling Belah Cepat (`#NNNN`)** untuk Supervisor QC, memisahkan tombol `[Spektrum]` dari dropdown label, serta menandai 6 kanal fitur SVM-RBF (sorotan khusus 730 & 810 nm) di `src/components/buahsafe/SpectralMiniChart.tsx`.
+  - Menambahkan tab **`Tarif & grade`** (Dynamic Grade Builder: `Rp / kg` vs `Rp / butir`, bobot rata-rata buah, tambah/hapus grade komersial non-afkir, harga sisa afkir) di `/pengaturan` serta kartu **Estimasi Nilai Risiko Kerugian yang Dicegah (Rp)** dan tabel **Mutu Pasokan per Petani Mitra** di `/analitik`.
+- **Files Modified**: `src/lib/buahsafe-data.ts`, `src/components/buahsafe/{ui,Layout,Sidebar,SpectralMiniChart}.tsx`, `src/routes/{index,antrean,riwayat,pengaturan,analitik}.tsx`, `logs/ACTIVITY_LOG.md`, `logs/DECISION_LOG.md`, `logs/CHANGELOG.md`.
+- **Verification**: `bunx tsc --noEmit` bersih (0 error); `bun run build` sukses (8.99s); `run_local_sandbox.py --test` lulus 100%.
+
 ### [2026-10-26 10:30] [Claude Code]
 - **Goal**: 13 masukan pengguna atas UI baru (konsistensi label, skeleton, mode terang, tooltip, layar penuh, suara, tablet, putus alat, data latih).
 - **Actions**:
