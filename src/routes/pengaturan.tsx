@@ -3,23 +3,41 @@ import { zodValidator, fallback } from "@tanstack/zod-adapter";
 import { z } from "zod";
 import { FormEvent, useEffect, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
-import { KeyRound, UserMinus, UserPlus, Sprout, Trash2, Cpu, Unplug, PlugZap } from "lucide-react";
+import { KeyRound, UserMinus, UserPlus, Sprout, Trash2, Cpu, Unplug, PlugZap, Coins, Plus, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PageLayout } from "@/components/buahsafe/Layout";
 import { DeviceStatus, EmptyState, SkeletonRows, Tip } from "@/components/buahsafe/ui";
 import { apiFetch } from "@/lib/api";
 import { ROLE_LABELS, Role, useAuth } from "@/lib/auth";
-import { Device, DeviceStatusInfo, fetchDeviceStatus, setDeviceEnabled, syncDevices } from "@/lib/buahsafe-data";
+import {
+  calculatePricingSummary,
+  DEFAULT_GRADE_PRICING,
+  Device,
+  DeviceStatusInfo,
+  fetchDeviceStatus,
+  fetchGradePricing,
+  GradePricingConfig,
+  saveGradePricing,
+  setDeviceEnabled,
+  syncDevices,
+} from "@/lib/buahsafe-data";
 
-const TABS = [
+export type SettingsTab = "pengguna" | "petani" | "tarif" | "perangkat";
+
+const TABS: ReadonlyArray<{ id: SettingsTab; label: string; icon: typeof UserPlus }> = [
   { id: "pengguna", label: "Pengguna", icon: UserPlus },
   { id: "petani", label: "Petani mitra", icon: Sprout },
+  { id: "tarif", label: "Tarif & grade", icon: Coins },
   { id: "perangkat", label: "Perangkat", icon: Cpu },
-] as const;
+];
 
 export const Route = createFileRoute("/pengaturan")({
-  validateSearch: zodValidator(z.object({ tab: fallback(z.enum(["pengguna", "petani", "perangkat"]), "pengguna").default("pengguna") })),
+  validateSearch: zodValidator(
+    z.object({
+      tab: fallback(z.enum(["pengguna", "petani", "tarif", "perangkat"]), "pengguna").default("pengguna"),
+    }),
+  ),
   component: PengaturanPage,
 });
 
@@ -31,7 +49,7 @@ function PengaturanPage() {
   const { tab } = Route.useSearch();
   const navigate = useNavigate({ from: "/pengaturan" });
   return (
-    <PageLayout title="Pengaturan" subtitle="Kelola akun pengguna, data petani mitra, dan alat pemindai." roles={["owner"]}>
+    <PageLayout title="Pengaturan" subtitle="Kelola akun pengguna, data petani mitra, skema tarif & grade, dan alat pemindai." roles={["owner"]}>
       <div className="flex gap-1 p-1 mb-6 rounded-2xl bg-secondary w-full sm:w-fit overflow-x-auto" role="tablist">
         {TABS.map((t) => (
           <button
@@ -49,6 +67,7 @@ function PengaturanPage() {
       </div>
       {tab === "pengguna" && <UsersTab />}
       {tab === "petani" && <PetaniTab />}
+      {tab === "tarif" && <TarifGradeTab />}
       {tab === "perangkat" && <DeviceTab />}
     </PageLayout>
   );
@@ -313,6 +332,288 @@ function PetaniTab() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// ---------------- Tarif & grade ----------------
+
+function TarifGradeTab() {
+  const [config, setConfig] = useState<GradePricingConfig>(DEFAULT_GRADE_PRICING);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [savedNotice, setSavedNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchGradePricing().then((p) => {
+      setConfig(p);
+      setLoading(false);
+    });
+  }, []);
+
+  const summary = calculatePricingSummary(config);
+
+  const updateGrade = (index: number, patch: Partial<{ name: string; price: number }>) => {
+    setSavedNotice(null);
+    setConfig((prev) => ({
+      ...prev,
+      grades: prev.grades.map((g, i) => (i === index ? { ...g, ...patch } : g)),
+    }));
+  };
+
+  const addGrade = () => {
+    setSavedNotice(null);
+    const nextLetter = String.fromCharCode(65 + config.grades.length);
+    setConfig((prev) => ({
+      ...prev,
+      grades: [
+        ...prev.grades,
+        {
+          id: `grade-${Date.now()}`,
+          name: `Grade ${nextLetter}`,
+          price: 10000,
+        },
+      ],
+    }));
+  };
+
+  const removeGrade = (index: number) => {
+    if (config.grades.length <= 1) return;
+    setSavedNotice(null);
+    setConfig((prev) => ({
+      ...prev,
+      grades: prev.grades.filter((_, i) => i !== index),
+    }));
+  };
+
+  const handleSave = async (e: FormEvent) => {
+    e.preventDefault();
+    const cleanedGrades = config.grades
+      .map((g, idx) => ({
+        id: g.id || `grade-${idx + 1}`,
+        name: g.name.trim() || `Grade ${idx + 1}`,
+        price: Math.max(0, Number(g.price) || 0),
+      }))
+      .filter((g) => g.name.length > 0);
+
+    if (cleanedGrades.length === 0) {
+      toast.error("Minimal harus ada 1 grade komersial");
+      return;
+    }
+
+    const payload: GradePricingConfig = {
+      unit: config.unit,
+      avg_weight_g: Math.min(2000, Math.max(50, Number(config.avg_weight_g) || 300)),
+      grades: cleanedGrades,
+      afkir_price: Math.max(0, Number(config.afkir_price) || 0),
+    };
+
+    setSaving(true);
+    const res = await saveGradePricing(payload);
+    setSaving(false);
+
+    if (!res.ok) {
+      toast.error("Skema harga belum tersimpan", { description: res.error });
+      return;
+    }
+
+    if (res.data?.pricing) {
+      setConfig(res.data.pricing);
+    } else {
+      setConfig(payload);
+    }
+    setSavedNotice("Skema harga berhasil disimpan dan diterapkan ke perhitungan Analitik.");
+    toast.success("Skema harga berhasil disimpan");
+  };
+
+  if (loading) {
+    return <SkeletonRows rows={3} className="h-32" />;
+  }
+
+  return (
+    <form onSubmit={handleSave} className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px] items-start">
+      <div className="space-y-6">
+        {/* Bagian 1 — Basis Satuan Harga */}
+        <section className="rounded-2xl bg-card border border-border p-5 space-y-4">
+          <div>
+            <h2 className="font-bold">1. Basis Satuan Harga</h2>
+            <p className="text-sm text-muted-foreground">
+              Pilih satuan harga jual yang berlaku di rumah sortir Anda.
+            </p>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block text-sm font-medium">
+              Satuan harga acuan
+              <select
+                className={`${input} mt-1`}
+                value={config.unit}
+                onChange={(e) => {
+                  setSavedNotice(null);
+                  setConfig({ ...config, unit: e.target.value as "kg" | "butir" });
+                }}
+              >
+                <option value="kg">Rp / kg (Per Kilogram)</option>
+                <option value="butir">Rp / butir (Per Buah)</option>
+              </select>
+            </label>
+
+            {config.unit === "kg" && (
+              <label className="block text-sm font-medium">
+                Bobot rata-rata per butir (gram)
+                <input
+                  type="number"
+                  min={50}
+                  max={2000}
+                  step={10}
+                  required
+                  className={`${input} mt-1 tabular`}
+                  value={config.avg_weight_g}
+                  onChange={(e) => {
+                    setSavedNotice(null);
+                    setConfig({ ...config, avg_weight_g: Number(e.target.value) });
+                  }}
+                />
+                <span className="block text-xs text-muted-foreground mt-1">
+                  Konversi otomatis: {config.avg_weight_g || 300} g ={" "}
+                  {summary.weightKgPerFruit.toLocaleString("id-ID")} kg/butir (rentang 50–2000 g).
+                </span>
+              </label>
+            )}
+          </div>
+        </section>
+
+        {/* Bagian 2 — Daftar Grade Komersial (Non-Afkir) Kustom */}
+        <section className="rounded-2xl bg-card border border-border p-5 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="font-bold">2. Daftar Grade Komersial (Non-Afkir)</h2>
+              <p className="text-sm text-muted-foreground">
+                Atur jumlah dan nama grade buah layak jual di gudang (mis. Grade Super, Grade A, Grade B, Grade C).
+              </p>
+            </div>
+            <button type="button" onClick={addGrade} className={ghostBtn}>
+              <Plus className="w-4 h-4" /> + Tambah grade
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            {config.grades.map((g, idx) => (
+              <div
+                key={g.id || idx}
+                data-testid="grade-row"
+                className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_220px_auto] items-end p-3 rounded-xl border border-border bg-secondary/30"
+              >
+                <label className="block text-xs font-semibold text-muted-foreground">
+                  Nama Grade
+                  <input
+                    type="text"
+                    required
+                    placeholder="Mis. Grade A"
+                    className={`${input} mt-1 text-foreground font-medium`}
+                    value={g.name}
+                    onChange={(e) => updateGrade(idx, { name: e.target.value })}
+                  />
+                </label>
+                <label className="block text-xs font-semibold text-muted-foreground">
+                  Harga Acuan (Rp / {config.unit})
+                  <input
+                    type="number"
+                    min={0}
+                    step={100}
+                    required
+                    className={`${input} mt-1 text-foreground font-semibold tabular`}
+                    value={g.price}
+                    onChange={(e) => updateGrade(idx, { price: Number(e.target.value) })}
+                  />
+                </label>
+                <button
+                  type="button"
+                  disabled={config.grades.length <= 1}
+                  onClick={() => removeGrade(idx)}
+                  aria-label={`Hapus ${g.name || `Grade ${idx + 1}`}`}
+                  className={`${ghostBtn} h-11 text-reject disabled:opacity-40 disabled:pointer-events-none justify-center`}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Bagian 3 — Harga Afkir / Nilai Sisa */}
+        <section className="rounded-2xl bg-card border border-border p-5 space-y-3">
+          <div>
+            <h2 className="font-bold">3. Harga Afkir / Nilai Sisa</h2>
+            <p className="text-sm text-muted-foreground">
+              Nilai jual sisa untuk buah anomali/afkir (mis. Rp 3.000 untuk pakan/olahan murah, atau Rp 0 jika dibuang).
+            </p>
+          </div>
+          <label className="block text-sm font-medium max-w-xs">
+            Harga Afkir / Nilai Sisa (Rp / {config.unit})
+            <input
+              type="number"
+              min={0}
+              step={100}
+              required
+              className={`${input} mt-1 tabular font-semibold`}
+              value={config.afkir_price}
+              onChange={(e) => {
+                setSavedNotice(null);
+                setConfig({ ...config, afkir_price: Number(e.target.value) });
+              }}
+            />
+          </label>
+        </section>
+      </div>
+
+      {/* Bagian 4 — Ringkasan Kalkulasi Otomatis */}
+      <section className="rounded-2xl bg-card border border-border p-5 space-y-4 sticky top-6">
+        <div>
+          <h2 className="font-bold">4. Ringkasan Kalkulasi Otomatis</h2>
+          <p className="text-sm text-muted-foreground">
+            Digunakan untuk menghitung Estimasi Nilai Risiko Kerugian yang Dicegah di halaman Analitik.
+          </p>
+        </div>
+
+        <dl className="space-y-3 text-sm border-t border-border pt-4">
+          <div className="flex items-baseline justify-between gap-3">
+            <dt className="text-muted-foreground">Rata-rata Harga Grade Komersial</dt>
+            <dd className="font-bold tabular text-right">
+              Rp {summary.avgCommercialPrice.toLocaleString("id-ID")} / {config.unit}
+            </dd>
+          </div>
+          <div className="flex items-baseline justify-between gap-3">
+            <dt className="text-muted-foreground">Selisih Nilai Risiko Tertahan</dt>
+            <dd className="font-bold tabular text-right">
+              Rp {summary.deltaPerUnit.toLocaleString("id-ID")} / {config.unit}
+            </dd>
+          </div>
+          <div className="rounded-xl bg-pass/15 border border-pass/30 p-3.5 mt-2">
+            <dt className="text-xs font-semibold text-muted-foreground">
+              Estimasi Kerugian Terselamatkan per 1 Buah Anomali Tertahan
+            </dt>
+            <dd className="text-xl font-extrabold tabular text-foreground mt-1">
+              Rp {summary.savedPerAnomalyFruitRp.toLocaleString("id-ID")} / butir
+            </dd>
+          </div>
+        </dl>
+
+        {savedNotice && (
+          <div
+            role="status"
+            className="flex items-start gap-2 rounded-xl bg-pass/15 border border-pass/30 px-3 py-2.5 text-xs font-medium text-foreground"
+          >
+            <CheckCircle2 className="w-4 h-4 text-pass shrink-0 mt-0.5" />
+            <span>{savedNotice}</span>
+          </div>
+        )}
+
+        <button type="submit" disabled={saving} className={`${primaryBtn} w-full`}>
+          <Coins className="w-4 h-4" />
+          {saving ? "Menyimpan…" : "Simpan skema harga"}
+        </button>
+      </section>
+    </form>
   );
 }
 
