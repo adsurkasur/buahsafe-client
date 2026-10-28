@@ -2,6 +2,7 @@ import { ReactElement, ReactNode, useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
 /** Penampang jambu kristal: kulit, daging, dan cincin biji. Dipakai sebagai logo. */
 export function BrandMark({ className = "w-9 h-9" }: { className?: string }) {
@@ -206,3 +207,71 @@ export function useChartColors() {
   }, []);
   return colors;
 }
+
+export interface ConfidenceTierInfo {
+  level: "Tinggi" | "Sedang" | "Rendah";
+  shortLabel: string;
+  explanation: string;
+  badgeClass: string;
+}
+
+/**
+ * Mengubah persentase keyakinan model SVM-RBF menjadi kategori kualitatif
+ * sesuai ambang keputusan model (threshold 0,35).
+ */
+export function getConfidenceTier(confidence: number): ConfidenceTierInfo {
+  if (confidence >= 85) {
+    return {
+      level: "Tinggi",
+      shortLabel: "Tinggi",
+      explanation: "Pemisahan spektral sangat tegas",
+      badgeClass: "bg-emerald-500/12 text-emerald-800 dark:text-emerald-300 border-emerald-500/25",
+    };
+  }
+  if (confidence >= 65) {
+    return {
+      level: "Sedang",
+      shortLabel: "Sedang",
+      explanation: "Dalam batas margin normal model",
+      badgeClass: "bg-amber-500/12 text-amber-800 dark:text-amber-300 border-amber-500/25",
+    };
+  }
+  return {
+    level: "Rendah",
+    shortLabel: "Rendah • Dekat ambang",
+    explanation: "Dekat ambang keputusan 0,35 — periksa fisik buah bila ragu",
+    badgeClass: "bg-red-500/12 text-red-800 dark:text-red-300 border-red-500/25",
+  };
+}
+
+export function ConfidenceBadge({
+  confidence,
+  result,
+  showExplanation = false,
+}: {
+  confidence: number;
+  result?: "NORMAL" | "ANOMALI" | "GAGAL";
+  showExplanation?: boolean;
+}) {
+  if (result === "GAGAL") {
+    return <span className="text-xs text-muted-foreground">Sensor/model gagal menilai</span>;
+  }
+  const tier = getConfidenceTier(confidence);
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1.5" title={tier.explanation}>
+      <span className="font-mono font-semibold tabular-nums">{confidence}%</span>
+      <span
+        className={cn(
+          "inline-flex items-center rounded border px-1.5 py-0.5 text-[11px] font-medium leading-none",
+          tier.badgeClass
+        )}
+      >
+        {tier.shortLabel}
+      </span>
+      {showExplanation && (
+        <span className="text-xs text-muted-foreground">({tier.explanation})</span>
+      )}
+    </span>
+  );
+}
+

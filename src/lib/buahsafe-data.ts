@@ -33,6 +33,7 @@ export interface ScanRecord {
   result: "NORMAL" | "ANOMALI" | "GAGAL";
   confidence: number;
   batchId: string;
+  petaniId?: string;
   operatorId?: string;
   spectral?: SpectralChannels;
   /** Kunci jawaban setelah buah dibelah: "", "normal", atau "anomali" */
@@ -99,8 +100,8 @@ function toScanRecord(m: any, devices: Device[]): ScanRecord {
     timestamp,
     result: m.prediction === "NORMAL" || m.prediction === "ANOMALI" ? m.prediction : "GAGAL",
     confidence: Math.round(m.confidence ?? 0),
-    // Batch = hari sortasi (server belum menyimpan kode batch tersendiri)
-    batchId: `BATCH-${timestamp.slice(0, 10).replace(/-/g, "")}`,
+    batchId: m.batch_id || `BATCH-${timestamp.slice(0, 10).replace(/-/g, "")}`,
+    petaniId: m.petani_id || undefined,
     operatorId: m.operator_id || undefined,
     label: m.label || "",
     spectral: Object.fromEntries(WAVELENGTHS.map((w) => [`nm${w}`, m[`nm${w}`] ?? 0])),
@@ -141,6 +142,8 @@ export interface QueueItem {
   timestamp: string;
   verdict: "NORMAL" | "ANOMALI" | "GAGAL";
   confidence: number;
+  petaniId?: string;
+  batchId?: string;
 }
 
 /**
@@ -159,6 +162,8 @@ export async function fetchQueue(limit = 12): Promise<QueueItem[] | null> {
       timestamp: m.timestamp,
       verdict: m.prediction === "NORMAL" || m.prediction === "ANOMALI" ? m.prediction : "GAGAL",
       confidence: Math.round(m.confidence ?? 0),
+      petaniId: m.petani_id || undefined,
+      batchId: m.batch_id || undefined,
     }));
 }
 
@@ -216,3 +221,89 @@ export const DEVICE_COLORS: Record<string, string> = {
   "BSF-002": "bg-blue-50 text-blue-700 border-blue-200",
   "BSF-003": "bg-violet-50 text-violet-700 border-violet-200",
 };
+
+export interface PetaniMitra {
+  id: string;
+  name: string;
+  village: string;
+  phone: string;
+  joined: string;
+}
+
+export interface ActiveBatchInfo {
+  batch_id: string;
+  petani_id: string;
+  petani_name: string;
+  village: string;
+  updated_at: string;
+}
+
+export async function fetchActiveBatch(): Promise<{ batch: ActiveBatchInfo; petani: PetaniMitra[] } | null> {
+  const res = await apiFetch<{ batch: ActiveBatchInfo; petani: PetaniMitra[] }>("api/batch/active", { timeoutMs: 4000 });
+  if (!res.ok || !res.data?.batch) return null;
+  return { batch: res.data.batch, petani: res.data.petani ?? [] };
+}
+
+export async function updateActiveBatch(petaniId: string, batchCode = "") {
+  return apiFetch<{ ok: boolean; batch: ActiveBatchInfo }>("api/batch/active", {
+    method: "POST",
+    body: JSON.stringify({ petani_id: petaniId, batch_code: batchCode }),
+  });
+}
+
+export interface CommercialGradeItem {
+  id: string;
+  name: string;
+  price: number;
+}
+
+export interface GradePricingConfig {
+  unit: "kg" | "butir";
+  avg_weight_g: number;
+  grades: CommercialGradeItem[];
+  afkir_price: number;
+}
+
+export const DEFAULT_GRADE_PRICING: GradePricingConfig = {
+  unit: "kg",
+  avg_weight_g: 300,
+  grades: [
+    { id: "grade-super", name: "Grade Super", price: 22000 },
+    { id: "grade-a", name: "Grade A", price: 18000 },
+    { id: "grade-b", name: "Grade B", price: 12000 },
+  ],
+  afkir_price: 3000,
+};
+
+export async function fetchGradePricing(): Promise<GradePricingConfig> {
+  const res = await apiFetch<{ pricing: GradePricingConfig }>("api/settings/pricing", { timeoutMs: 4000 });
+  if (res.ok && res.data?.pricing) return res.data.pricing;
+  return DEFAULT_GRADE_PRICING;
+}
+
+export async function saveGradePricing(config: GradePricingConfig) {
+  return apiFetch<{ ok: boolean; pricing: GradePricingConfig }>("api/settings/pricing", {
+    method: "PUT",
+    body: JSON.stringify(config),
+  });
+}
+
+export function calculatePricingSummary(config: GradePricingConfig) {
+  const validGrades = config.grades.filter((g) => g.price >= 0);
+  const avgCommercialPrice =
+    validGrades.length > 0
+      ? Math.round(validGrades.reduce((acc, g) => acc + Number(g.price || 0), 0) / validGrades.length)
+      : 0;
+  const deltaPerUnit = Math.max(0, avgCommercialPrice - Number(config.afkir_price || 0));
+  const weightKgPerFruit = Math.max(0.05, Number(config.avg_weight_g || 300) / 1000);
+  const savedPerAnomalyFruitRp =
+    config.unit === "kg" ? Math.round(deltaPerUnit * weightKgPerFruit) : deltaPerUnit;
+
+  return {
+    avgCommercialPrice,
+    deltaPerUnit,
+    weightKgPerFruit,
+    savedPerAnomalyFruitRp,
+  };
+}
+
