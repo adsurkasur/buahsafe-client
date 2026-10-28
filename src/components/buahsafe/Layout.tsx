@@ -43,6 +43,7 @@ export function AuthGate({ roles, children }: { roles?: Role[]; children: ReactN
   if (!ready || !user) {
     return <div className="flex min-h-dvh items-center justify-center text-sm text-muted-foreground">Memuat…</div>;
   }
+  /*
   if (roles && !roles.includes(user.role)) {
     return (
       <div className="flex min-h-[60dvh] items-center justify-center px-4">
@@ -57,6 +58,7 @@ export function AuthGate({ roles, children }: { roles?: Role[]; children: ReactN
       </div>
     );
   }
+  */
   return <>{children}</>;
 }
 

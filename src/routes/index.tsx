@@ -1,18 +1,28 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { format, formatDistanceToNow, startOfDay, subDays } from "date-fns";
 import { ScanLine } from "lucide-react";
 import { PageLayout } from "@/components/buahsafe/Layout";
-import { DeviceStatus, EmptyState, KpiTile, SkeletonRows, VerdictChip, useChartColors } from "@/components/buahsafe/ui";
+import { ConfidenceBadge, DeviceStatus, EmptyState, KpiTile, SkeletonRows, VerdictChip, useChartColors } from "@/components/buahsafe/ui";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DeviceStatusInfo, fetchDeviceStatus, fetchQueue, getDevices, getScans, QueueItem, ScanRecord, syncDevices, syncScans } from "@/lib/buahsafe-data";
+import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/")({ component: Ringkasan });
 
 const pct = (n: number, d: number) => (d ? `${Math.round((n / d) * 100)}%` : "—");
 
 function Ringkasan() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (user?.role === "operator") {
+      navigate({ to: "/antrean", replace: true });
+    }
+  }, [user?.role, navigate]);
+
   const [scans, setScans] = useState<ScanRecord[]>(getScans());
   const [recent, setRecent] = useState<QueueItem[] | null>(null);
   const [synced, setSynced] = useState(false);
@@ -96,6 +106,7 @@ function Ringkasan() {
                   <span className="flex-1 text-sm text-muted-foreground">
                     {formatDistanceToNow(new Date(r.timestamp), { addSuffix: true })}
                   </span>
+                  <ConfidenceBadge confidence={r.confidence} result={r.verdict} />
                   <VerdictChip verdict={r.verdict} />
                 </li>
               ))}

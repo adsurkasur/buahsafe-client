@@ -14,7 +14,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/antrean", label: "Antrean", icon: ScanLine, roles: ["operator", "supervisor", "owner"] },
   { to: "/", label: "Ringkasan", icon: LayoutDashboard, roles: ["supervisor", "owner"] },
   { to: "/riwayat", label: "Riwayat & label", icon: ClipboardList, roles: ["supervisor", "owner"] },
-  { to: "/analitik", label: "Analitik", icon: BarChart3, roles: ["owner"] },
+  { to: "/analitik", label: "Analitik", icon: BarChart3, roles: ["supervisor", "owner"] },
   { to: "/pengaturan", label: "Pengaturan", icon: Settings, roles: ["owner"] },
 ];
 
@@ -37,7 +37,7 @@ export function AppSidebar() {
     // Kolom luar memberi latar penuh setinggi halaman; isi tetap menempel saat digulir
     <div className="hidden lg:block w-64 shrink-0 border-r border-sidebar-border bg-sidebar">
     <aside className="flex flex-col sticky top-0 h-dvh">
-      <Link to="/" className="flex items-center gap-3 px-6 h-20">
+      <Link to={user?.role === "operator" ? "/antrean" : "/"} className="flex items-center gap-3 px-6 h-20">
         <BrandMark />
         <div>
           <div className="text-lg font-extrabold tracking-tight leading-none">BuahSafe</div>
