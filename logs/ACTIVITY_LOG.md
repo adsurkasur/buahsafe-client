@@ -94,3 +94,9 @@
   - Memverifikasi build production Vite (`dist/` terbentuk bersih).
 - **Files Modified**: `src/lib/api.ts` (baru), `.env.example` (baru), `src/lib/auth.tsx`, `src/lib/buahsafe-data.ts`, `src/routes/login.tsx`, `src/routes/scan.tsx`, `src/routes/index.tsx`, `src/routes/devices.tsx`, `src/routes/history.tsx`, `src/routes/analytics.tsx`, `src/routes/master-data.tsx`, `src/components/buahsafe/Sidebar.tsx`.
 - **Verification**: `bun run build` sukses dalam 11.98s tanpa galat tipe atau bundel.
+
+### [2026-11-16 20:41] [Antigravity]
+- **Goal**: Sinkronisasi arsip dokumentasi konsep dan komponen legacy BuahSafe client.
+- **Actions**: Menambahkan berkas konsep_buahsafe.md, PROJECT_OVERVIEW.md di `docs/legacy/`, dan arsip komponen di `src/legacy/`.
+- **Files Modified**: `docs/legacy/`, `src/legacy/`, `logs/ACTIVITY_LOG.md`.
+- **Verification**: `bun run build` sukses dalam 11.95s.
